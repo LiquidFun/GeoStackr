@@ -9,6 +9,7 @@ import time
 USER = "olsnes"
 SERIES = "octoberstreakstacker"
 
+DRY_RUN = False
 
 def get_reddit_instance():
     # Read reddit client_id and client_secret from file (to avoid accidentally publishing it)
@@ -39,25 +40,39 @@ def get_bot_username():
     return lines[2].strip()
 
 
+ignore_users = {get_bot_username(), "GeoGuessrTrackingBot"}
+
+
 def get_info_line():
     return """
 
 ---
 
-^(Author: /u/LiquidProgrammer) ^(|) ^[Source code](https://github.com/LiquidFun/GeoStackr)
+^(I'm a bot! | Author:) ^[LiquidProgrammer](https://www.reddit.com/message/compose/?to=LiquidProgrammer) ^(|) ^([Source code](https://github.com/LiquidFun/GeoStackr))
 """
 
 
 def get_score_list(submission):
-    ignore_users = {get_bot_username(), "GeoGuessrTrackingBot"}
     score_list = {}
-    repliedCommentIds = set()
     for comment in submission.comments.list():
         numbers = re.findall(r'\d{2,5}', comment.body)
         if numbers:
             if comment.author.name not in ignore_users:
                 highest = max([int(a) for a in numbers])
                 score_list[comment.author.name] = highest
+    return score_list
+
+
+def get_highest_streak(submission):
+    score_list = {}
+    for comment in submission.comments.list():
+        numbers = re.findall(r'\d{1,5}', comment.body)
+        if numbers:
+            if comment.author.name not in ignore_users:
+                intified = [int(a) for a in numbers]
+                m = max(intified)
+                highest_streak = max(set(intified) - {m} - {m/100})
+                score_list[comment.author.name] = highest_streak
     return score_list
 
 
@@ -90,21 +105,29 @@ def still_needs_post(submission):
     return True
 
 
-def get_top10(scores_dict):
+def get_top(scores_dict):
     score_list = list(scores_dict.items())
     score_list.sort(key=lambda v: -v[1].sum())
-    return score_list[:10]
+    return score_list
 
 
 def get_formatted_body(top10):
     body = ""
     body += "Stacked Scores:\n\n"
-    body += "| Username | Times Participated | Average Score | **Score Sum** |\n"
-    body += "|:-|-:|-:|-:|\n"
-    for user, scores in top10:
-        body += f"| {user} | {scores.len()} | {scores.avg()} | {scores.sum()} |\n"
+    body += "| # | Username | Times Played | Average | **Sum** |\n"
+    body += "|:-|:-|-:|-:|-:|\n"
+    for index, (user, scores) in enumerate(top10):
+        body += f"| {index+1} | /u/{user} | {scores.len()} | {scores.avg()} | {scores.sum()} |\n"
     body += get_info_line()
     return body
+
+
+def get_formatted_csv(top):
+    text = ""
+    text += "    Username, Times Played, Average, Sum\n"
+    for index, (user, scores) in enumerate(top):
+        text += f"    {user}, {scores.len()}, {scores.avg()}, {scores.sum()}\n"
+    return text
 
 
 def merge_scores(scores_dict, submission):
@@ -131,25 +154,33 @@ def check_submissions(user, series):
         print(s.title, ":")
         # Check if should post
         if scores_dict:
-            if still_needs_post(s):
-                top10 = get_top10(scores_dict)
-                body = get_formatted_body(top10)
+            if still_needs_post(s) or DRY_RUN:
+                top = get_top(scores_dict)
+                csv = get_formatted_csv(top)
+                print(csv)
+                subject = f'Statistics for "{s.title}"'
+                body = get_formatted_body(top[:10])
                 print(body)
-                s.reply(body)
+                if not DRY_RUN:
+                    redditor.message(subject, csv)
+                    s.reply(body)
 
         # Get scores
         merge_scores(scores_dict, s)
 
 
 if __name__ == "__main__":
-    while True:
-        try:
-            check_submissions(USER, SERIES)
-        except Exception as e:
-            print("Found error, skipping this loop. ")
-            print(str(e))
-        time_to_sleep = 600
-        sleep_message = "Sleeping for " + str(time_to_sleep / 60) + " minutes"
-        print(sleep_message)
-        print("=" * len(sleep_message))
-        time.sleep(time_to_sleep)
+    if DRY_RUN:
+        check_submissions(USER, SERIES)
+    else:
+        while True:
+            try:
+                check_submissions(USER, SERIES)
+            except Exception as e:
+                print("Found error, skipping this loop. ")
+                print(str(e))
+            time_to_sleep = 600
+            sleep_message = "Sleeping for " + str(time_to_sleep / 60) + " minutes"
+            print(sleep_message)
+            print("=" * len(sleep_message))
+            time.sleep(time_to_sleep)
