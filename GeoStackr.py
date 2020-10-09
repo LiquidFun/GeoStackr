@@ -24,7 +24,7 @@ def get_reddit_instance():
     # Get reddit instance
     reddit = praw.Reddit(client_id=client_id.rstrip(), 
                          client_secret=client_secret.rstrip(), 
-                         user_agent='linux:georunnr_bot:0.1 (by /u/LiquidProgrammer',
+                         user_agent='linux:geostackr:0.1 (by /u/LiquidProgrammer',
                          username=username.rstrip(),
                          password=password.rstrip())
     return reddit
@@ -44,7 +44,7 @@ def get_info_line():
 
 ---
 
-^(Author:) ^[LiquidProgrammer](https://www.reddit.com/message/compose/?to=LiquidProgrammer) ^(|) ^[Source code](https://github.com/LiquidFun/GeoStackr)
+^(Author: /u/LiquidProgrammer) ^(|) ^[Source code](https://github.com/LiquidFun/GeoStackr)
 """
 
 
