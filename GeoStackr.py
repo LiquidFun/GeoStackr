@@ -1,7 +1,7 @@
 import re
 import os
-import sys
 from datetime import datetime
+import time
 
 import praw
 
