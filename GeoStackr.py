@@ -1,15 +1,17 @@
-import praw
 import re
-import os, sys
+import os
+import sys
 from datetime import datetime
-import math
-import time
+
+import praw
 
 # Change these if you want to run it for a different series 
 USER = "olsnes"
 SERIES = "octoberstreakstacker"
+TOP_COUNT = 20
 
-DRY_RUN = False
+# In debug mode nothing commiting will be done (i.e. no posts on reddit). Only prints to stdout
+DEBUG_MODE = False
 
 def get_reddit_instance():
     # Read reddit client_id and client_secret from file (to avoid accidentally publishing it)
@@ -154,14 +156,14 @@ def check_submissions(user, series):
         print(s.title, ":")
         # Check if should post
         if scores_dict:
-            if still_needs_post(s) or DRY_RUN:
+            if still_needs_post(s) or DEBUG_MODE:
                 top = get_top(scores_dict)
                 csv = get_formatted_csv(top)
                 print(csv)
                 subject = f'Statistics for "{s.title}"'
-                body = get_formatted_body(top[:10])
+                body = get_formatted_body(top[:TOP_COUNT])
                 print(body)
-                if not DRY_RUN:
+                if not DEBUG_MODE:
                     redditor.message(subject, csv)
                     s.reply(body)
 
@@ -170,7 +172,7 @@ def check_submissions(user, series):
 
 
 if __name__ == "__main__":
-    if DRY_RUN:
+    if DEBUG_MODE:
         check_submissions(USER, SERIES)
     else:
         while True:
