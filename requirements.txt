@@ -1,3 +1,5 @@
 praw
 pyyaml
 matplotlib
+matplotlib-label-lines
+imgurpython

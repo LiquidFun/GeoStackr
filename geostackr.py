@@ -5,11 +5,14 @@ from datetime import datetime
 
 import praw
 import yaml
-from matplotlib import pyplot as plt
 
-# Change these if you want to run it for a different series 
+
+# Change these if you want to run it for a different series
 CONFIG = "config.yaml"
+FIG_PATH = "last_fig.png"
 TOP_COUNT = 20
+TOP_PLOT_COUNT = 5
+SLEEP_INTERVAL_SECONDS = 600
 
 
 # Load config
@@ -37,17 +40,29 @@ except KeyError:
     print(f"No series defined in {CONFIG}!")
     sys.exit(1)
 
+try:
+    REDDIT_API = config['reddit_api']
+except KeyError:
+    print(f"reddit_api not defined in {CONFIG}!")
+    sys.exit(1)
+
+try:
+    IMGUR_API = config['imgur_api']
+except KeyError:
+    print(f"imgur_api not defined in {CONFIG}, won't post graphs!")
+    IMGUR_API = None
+
 
 class UserScores:
     def __init__(self, author):
-        self.scores = []
+        self.scores = {}
         self.author = author
 
-    def add(self, score: int):
-        self.scores.append(score)
+    def add(self, round_index: int, score: int):
+        self.scores[round_index] = score
 
     def sum(self):
-        return sum(self.scores)
+        return sum(self.scores.values())
 
     def len(self):
         return len(self.scores)
@@ -55,19 +70,38 @@ class UserScores:
     def avg(self):
         return self.sum()//self.len()
 
+    def last(self):
+        return self.scores[max(self.scores)]
+
     def __repr__(self):
         return str(self.scores)
 
+    def _xy(self):
+        xy = {"x": [], "y": []}
+        prev_y = 0
+        for i in range(1, max(self.scores)+1):
+            xy['x'].append(i)
+            if i in self.scores:
+                prev_y = prev_y + self.scores[i]
+            xy['y'].append(prev_y)
+        return xy
+
+    def x(self):
+        """For using in pyplot"""
+        return self._xy()['x']
+
+    def y(self):
+        """For using in pyplot"""
+        return self._xy()['y']
+
 
 def get_reddit_instance():
-    reddit_api = config['reddit_api']
-
     # Get reddit instance
     return praw.Reddit(
-        client_id=reddit_api['client_id'],
-        client_secret=reddit_api['client_secret'],
-        username=reddit_api['username'],
-        password=reddit_api['password'],
+        client_id=REDDIT_API['client_id'],
+        client_secret=REDDIT_API['client_secret'],
+        username=REDDIT_API['username'],
+        password=REDDIT_API['password'],
         user_agent='linux:geostackr:0.1 (by /u/LiquidProgrammer)',
     )
 
@@ -85,7 +119,7 @@ def get_info_line():
     author = "[LiquidProgrammer](https://www.reddit.com/message/compose/?to=LiquidProgrammer)"
     source = "[Source code](https://github.com/LiquidFun/GeoStackr)"
 
-    return f"\n\n---\n\n ^(I'm a {bot}! | Author: {author} | {source})"
+    return f"\n---\n\n^(I'm a {bot}! | Author: {author} | {source})"
 
 
 def get_score_list(submission):
@@ -126,13 +160,14 @@ def get_top(scores_dict):
     return score_list
 
 
-def get_formatted_body(top10):
-    body = ""
-    body += "Stacked Scores:\n\n"
+def get_formatted_body(top10, url=None):
+    body = "Stacked Scores:\n\n"
+    if url:
+        body += f"## NEW! [Score history of top 5 participants]({url})\n\n"
     body += "| # | Username | Times Played | Average | **Sum** |\n"
     body += "|:-|:-|-:|-:|-:|\n"
-    for index, (user, scores) in enumerate(top10):
-        body += f"| {index+1} | /u/{user} | {scores.len()} | {scores.avg()} | {scores.sum()} |\n"
+    for index, (user, scores) in enumerate(top10, 1):
+        body += f"| {index} | /u/{user} | {scores.len()} | {scores.avg()} | {scores.sum()} |\n"
     body += get_info_line()
     return body
 
@@ -140,17 +175,56 @@ def get_formatted_body(top10):
 def get_formatted_csv(top):
     indent = " " * 4
     text = f"{indent}Username, Times Played, Average, Sum\n"
-    for index, (user, scores) in enumerate(top):
+    for index, (user, scores) in enumerate(top, 1):
         text += f"{indent}{user}, {scores.len()}, {scores.avg()}, {scores.sum()}\n"
     return text
 
 
-def merge_scores(scores_dict, submission):
+def merge_scores(scores_dict, submission, series_index: int):
     sub_scores = get_score_list(submission)
     for user, score in sub_scores.items():
         if user not in scores_dict:
             scores_dict[user] = UserScores(user)
-        scores_dict.get(user).add(score)
+        scores_dict.get(user).add(series_index, score)
+
+
+def save_plot(scores_dict, series_index: int):
+    from matplotlib import pyplot as plt
+    from labellines import labelLines
+    # Doesn't make much sense to plot anything if there is only 1 post
+    if series_index <= 2:
+        return None
+    plt.rcParams.update({'font.size': 8})
+    plt.title(f"Score History for Current Top {TOP_PLOT_COUNT} Participants")
+    plt.ylabel("Stacked scores")
+    plt.xlabel("Post number")
+    plt.xticks(list(range(1, series_index)))
+    plt.margins(x=.15)
+    for user, scores in scores_dict[:TOP_PLOT_COUNT]:
+        prev_line = plt.plot(scores.x(), scores.y(), ".-", label=user, linewidth=1.5)
+        x_offset = 0.01 * series_index
+        plt.text(scores.x()[-1]+x_offset, scores.y()[-1],
+                 scores.sum(), color=prev_line[0].get_color(),
+                 verticalalignment="center")
+    # for line in plt.gca().get_lines():
+    #     print(line, line.get_data())
+    filter_lines_below_2x_values = [l for l in plt.gca().get_lines() if len(l.get_data()[0]) >= 2]
+    labelLines(filter_lines_below_2x_values, zorder=2.5)
+    # plt.legend(loc="upper left")
+    plt.savefig(FIG_PATH, dpi=300)
+    plt.close()
+
+
+def upload_to_imgur():
+    from imgurpython import ImgurClient
+    client = ImgurClient(IMGUR_API['client_id'], IMGUR_API['client_secret'])
+    url = client.upload_from_path(FIG_PATH)['link']
+    print(f"Uploaded image to {url}")
+    return url
+
+
+def format_title(title):
+    return title.lower().replace(" ", "")
 
 
 def check_submissions_for_series(user, series):
@@ -160,28 +234,32 @@ def check_submissions_for_series(user, series):
     redditor = reddit.redditor(user)
     relevant_submissions = []
     for submission in redditor.submissions.new():
-        if series in submission.title.lower().replace(" ", ""):
+        if series in format_title(submission.title):
             relevant_submissions.append(submission)
     relevant_submissions.sort(key=lambda s: s.created_utc)
     scores_dict = {}
-    for s in relevant_submissions:
-        print()
-        print(s.title, ":")
+    for series_index, submission in enumerate(relevant_submissions, 1):
+        print(f"\n{submission.title}: ")
         # Check if should post
         if scores_dict:
-            if still_needs_post(s) or DEBUG_MODE:
+            if still_needs_post(submission) or DEBUG_MODE:
                 top = get_top(scores_dict)
+                url = None
+                if IMGUR_API:
+                    save_plot(top, series_index)
+                    url = upload_to_imgur()
                 csv = get_formatted_csv(top)
                 print(csv)
-                subject = f'Statistics for "{s.title}"'
-                body = get_formatted_body(top[:TOP_COUNT])
+                subject = f'Statistics for "{submission.title}"'
+                body = get_formatted_body(top[:TOP_COUNT], url=url)
                 print(body)
+                # sys.exit()
                 if not DEBUG_MODE:
                     redditor.message(subject, csv)
-                    s.reply(body)
+                    submission.reply(body)
 
         # Get scores
-        merge_scores(scores_dict, s)
+        merge_scores(scores_dict, submission, series_index)
 
 
 def handle_each_series():
@@ -199,8 +277,7 @@ if __name__ == "__main__":
             except Exception as e:
                 print("Found error, skipping this loop. ")
                 print(str(e))
-            time_to_sleep = 600
-            sleep_message = "Sleeping for " + str(time_to_sleep / 60) + " minutes"
+            sleep_message = "Sleeping for " + str(SLEEP_INTERVAL_SECONDS / 60) + " minutes"
             print(sleep_message)
             print("=" * len(sleep_message))
-            time.sleep(time_to_sleep)
+            time.sleep(SLEEP_INTERVAL_SECONDS)
