@@ -1,0 +1,29 @@
+### Rename this file to config.yaml and change the corresponding values
+### Possibly uncomment what you need
+
+### If True then nothing will be posted to reddit when running 
+debug: False
+
+### Your reddit api key client_id and client_secret for the bot account
+reddit_api:
+    client_id: $your_reddit_api_client_id
+    client_secret: $your_reddit_api_client_secret
+    username: $your_reddit_bot_username
+    password: $your_reddit_bot_password
+
+### Used to post pretty graphs for the history of the series
+### Can be left out, then no graphs will be posted. Uncomment if needed.
+# imgur_api:
+#     client_id: $your_imgur_api_client_id
+#     client_secret: $your_imgur_api_client_secret
+
+### The series you want to be tracked
+### List of title&author pairs, where title is a lowercase name without spaces
+### which is guaranteed to be in the title of every post in the series, and the
+### author which is the author of every post in the series.
+### Example:
+series:
+    - title: octoberstreakstacker
+      author: olsnes
+    - title: novemberstreakstacker
+      author: olsnes
