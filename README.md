@@ -15,7 +15,7 @@ See [this post](https://www.reddit.com/r/geoguessr/comments/j6wzvj/3_october_str
 
 ## Install the requirements using pip:
 
-`pip3 install requirements.txt`
+`pip3 install --user -r requirements.txt`
 
 ## Run it in a `tmux` or `screen` session on your server:
 
