@@ -1,57 +1,81 @@
-import re
 import os
-from datetime import datetime
+import sys
+import re
 import time
+from datetime import datetime
 
 import praw
+import yaml
+from matplotlib import pyplot as plt
 
 # Change these if you want to run it for a different series 
-USER = "olsnes"
-SERIES = "octoberstreakstacker"
+CONFIG = "config.yaml"
 TOP_COUNT = 20
 
+
+# Load config
+try:
+    config = yaml.load(open(CONFIG), Loader=yaml.FullLoader)
+except IOError:
+    print(f"Could not load {CONFIG}. Make sure to rename it from {CONFIG}.example to {CONFIG}")
+    sys.exit(1)
+
+
 # In debug mode nothing commiting will be done (i.e. no posts on reddit). Only prints to stdout
-DEBUG_MODE = False
+DEBUG_MODE = config['debug']
+
+# Each series to be tracked
+SERIES = config['series']
+
+
+class UserScores:
+    def __init__(self, author):
+        self.scores = []
+        self.author = author
+
+    def add(self, score: int):
+        self.scores.append(score)
+
+    def sum(self):
+        return sum(self.scores)
+
+    def len(self):
+        return len(self.scores)
+
+    def avg(self):
+        return self.sum()//self.len()
+
+    def __repr__(self):
+        return str(self.scores)
+
 
 def get_reddit_instance():
-    # Read reddit client_id and client_secret from file (to avoid accidentally publishing it)
-    inputFile = open(os.path.join(os.path.dirname(__file__), "RedditAPIAccess.txt"))
-    lines = []
-    for line in inputFile:
-        lines.append(line)
-    client_id = lines[0]
-    client_secret = lines[1]
-    username = lines[2]
-    password = lines[3]
+    reddit_api = config['reddit_api']
 
     # Get reddit instance
-    reddit = praw.Reddit(client_id=client_id.rstrip(), 
-                         client_secret=client_secret.rstrip(), 
-                         user_agent='linux:geostackr:0.1 (by /u/LiquidProgrammer',
-                         username=username.rstrip(),
-                         password=password.rstrip())
-    return reddit
+    return praw.Reddit(
+        client_id=reddit_api['client_id'],
+        client_secret=reddit_api['client_secret'],
+        username=reddit_api['username'],
+        password=reddit_api['password'],
+        user_agent='linux:geostackr:0.1 (by /u/LiquidProgrammer)',
+    )
 
 
 # Get the username of the bot which is currently logged in
 def get_bot_username():
-    inputFile = open(os.path.join(os.path.dirname(__file__), "RedditAPIAccess.txt"))
-    lines = []
-    for line in inputFile:
-        lines.append(line)
-    return lines[2].strip()
+    return config['reddit_api']['username']
 
 
 ignore_users = {get_bot_username(), "GeoGuessrTrackingBot"}
 
 
 def get_info_line():
-    return """
+    bot = "[bot](https://xkcd.com/1646/)"
+    author = "[LiquidProgrammer](https://www.reddit.com/message/compose/?to=LiquidProgrammer)"
+    source = "[Source code](https://github.com/LiquidFun/GeoStackr)"
 
----
-
-^(I'm a bot! | Author:) ^[LiquidProgrammer](https://www.reddit.com/message/compose/?to=LiquidProgrammer) ^(|) ^([Source code](https://github.com/LiquidFun/GeoStackr))
-"""
+    return f"\n\n---\n\n ^(I'm a {bot}! | Author: {author} | {source})"
 
 
 def get_score_list(submission):
@@ -76,27 +100,6 @@ def get_highest_streak(submission):
                 highest_streak = max(set(intified) - {m} - {m/100})
                 score_list[comment.author.name] = highest_streak
     return score_list
-
-
-class UserScores:
-    def __init__(self, author):
-        self.scores = []
-        self.author = author
-
-    def add(self, score: int):
-        self.scores.append(score)
-
-    def sum(self):
-        return sum(self.scores)
-
-    def len(self):
-        return len(self.scores)
-
-    def avg(self):
-        return self.sum()//self.len()
-
-    def __repr__(self):
-        return str(self.scores)
 
 
 def still_needs_post(submission):
@@ -171,13 +174,18 @@ def check_submissions(user, series):
         merge_scores(scores_dict, s)
 
 
+def handle_each_series():
+    for series in SERIES:
+        check_submissions(series['author'], series['title'])
+
+
 if __name__ == "__main__":
     if DEBUG_MODE:
-        check_submissions(USER, SERIES)
+        handle_each_series()
     else:
         while True:
             try:
-                check_submissions(USER, SERIES)
+                handle_each_series()
             except Exception as e:
                 print("Found error, skipping this loop. ")
                 print(str(e))
