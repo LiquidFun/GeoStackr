@@ -1,4 +1,3 @@
-import os
 import sys
 import re
 import time
@@ -17,15 +16,26 @@ TOP_COUNT = 20
 try:
     config = yaml.load(open(CONFIG), Loader=yaml.FullLoader)
 except IOError:
-    print(f"Could not load {CONFIG}. Make sure to rename it from {CONFIG}.example to {CONFIG}")
+    print(f"Could not load {CONFIG}. Make sure to rename it from {CONFIG}.example to {CONFIG}!")
     sys.exit(1)
 
-
 # In debug mode nothing commiting will be done (i.e. no posts on reddit). Only prints to stdout
-DEBUG_MODE = config['debug']
+try:
+    DEBUG_MODE = config['debug']
+except KeyError:
+    print(f"Setting 'debug' to 'True' since it is not defined in {CONFIG}")
+    DEBUG_MODE = True
 
 # Each series to be tracked
-SERIES = config['series']
+try:
+    SERIES = config['series']
+    print("=== Series found ===")
+    for series in SERIES:
+        print(f"Series title: {series['title']}, author: {series['author']}")
+    print()
+except KeyError:
+    print(f"No series defined in {CONFIG}!")
+    sys.exit(1)
 
 
 class UserScores:
@@ -128,10 +138,10 @@ def get_formatted_body(top10):
 
 
 def get_formatted_csv(top):
-    text = ""
-    text += "    Username, Times Played, Average, Sum\n"
+    indent = " " * 4
+    text = f"{indent}Username, Times Played, Average, Sum\n"
     for index, (user, scores) in enumerate(top):
-        text += f"    {user}, {scores.len()}, {scores.avg()}, {scores.sum()}\n"
+        text += f"{indent}{user}, {scores.len()}, {scores.avg()}, {scores.sum()}\n"
     return text
 
 
@@ -143,7 +153,7 @@ def merge_scores(scores_dict, submission):
         scores_dict.get(user).add(score)
 
 
-def check_submissions(user, series):
+def check_submissions_for_series(user, series):
     print(str(datetime.now()) + ": Running GeoStackr.")
 
     reddit = get_reddit_instance()
@@ -176,7 +186,7 @@ def check_submissions(user, series):
 
 def handle_each_series():
     for series in SERIES:
-        check_submissions(series['author'], series['title'])
+        check_submissions_for_series(series['author'], series['title'])
 
 
 if __name__ == "__main__":
