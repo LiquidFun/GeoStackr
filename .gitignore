@@ -1,3 +1,4 @@
 config.yaml
 tags
 last_fig.png
+__pycache__/
