@@ -157,12 +157,12 @@ def get_score_list(submission, series_config):
     return score_list
 
 
-def still_needs_post(submission):
+def get_already_posted_comment(submission):
     for comment in submission.comments:
         if comment.author.name == get_bot_username():
             if "Stacked Scores" in comment.body:
-                return False
-    return True
+                return comment
+    return None
 
 
 def get_top(scores_dict):
@@ -172,13 +172,16 @@ def get_top(scores_dict):
 
 
 def get_formatted_body(top10, url=None):
-    body = "Stacked Scores:\n\n"
+    body = ""
     if url:
         body += f"[Score history of top 5 participants]({url})\n\n"
+    body += "Stacked Scores:\n\n"
     body += "| # | Username | Times Played | Average | **Sum** |\n"
     body += "|:-|:-|-:|-:|-:|\n"
     for index, (user, scores) in enumerate(top10, 1):
         body += f"| {index} | /u/{user} | {scores.len()} | {scores.avg()} | {scores.sum()} |\n"
+    now = datetime.utcnow().replace(microsecond=0).isoformat().replace("T", " ")
+    body += f"\nUpdated: {now} UTC\n"
     body += get_info_line()
     return body
 
@@ -253,8 +256,11 @@ def check_submissions_for_series(series_config):
         print(f"\n{submission.title}: ")
         # Check if should post
         if scores_dict:
-            if still_needs_post(submission) or DEBUG_MODE:
-                top = get_top(scores_dict)
+            top = get_top(scores_dict)
+            comment = get_already_posted_comment(submission)
+            # Post new if not already there
+            if comment is None:
+                print("\n\n\n=== POSTING NEW COMMENT ===")
                 url = None
                 if IMGUR_API:
                     save_plot(top, series_index)
@@ -268,6 +274,17 @@ def check_submissions_for_series(series_config):
                 if not DEBUG_MODE:
                     redditor.message(subject, csv)
                     submission.reply(body)
+            # If comment exists then edit it instead
+            else:
+                print("\n\n\n=== EDITING ===")
+                url = re.search(r'https:\/\/i\.imgur\.com\/.*\.png', comment.body)
+                if url:
+                    url = url.group(0)
+                body = get_formatted_body(top[:TOP_COUNT], url=url)
+                print(body)
+                if not DEBUG_MODE:
+                    comment.edit(body)
+
 
         # Get scores
         merge_scores(scores_dict, submission, series_index, series_config)
