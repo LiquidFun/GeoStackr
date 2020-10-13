@@ -36,7 +36,7 @@ try:
     print("=== Series found ===")
     for series_config in SERIES_CONFIGS:
         if 'regex' not in series_config:
-            series['regex'] = DEFAULT_REGEX
+            series_config['regex'] = DEFAULT_REGEX
         # print(f"{series_config=}") # Python 3.8 needed :(
         keyvals = ', '.join([f"{k}='{v}'" for k, v in series_config.items()])
         print(f"series_config={keyvals}")
