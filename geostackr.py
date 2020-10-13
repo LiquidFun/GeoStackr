@@ -150,18 +150,20 @@ def get_goal_number_from_text(series_config, text):
 def get_score_list(submission, series_config):
     score_list = {}
     for comment in submission.comments.list():
-        if comment.author.name not in ignore_users:
-            number = get_goal_number_from_text(series_config, comment.body)
-            if number:
-                score_list[comment.author.name] = number
+        if comment.author:
+            if comment.author.name not in ignore_users:
+                number = get_goal_number_from_text(series_config, comment.body)
+                if number:
+                    score_list[comment.author.name] = number
     return score_list
 
 
 def get_already_posted_comment(submission):
     for comment in submission.comments:
-        if comment.author.name == get_bot_username():
-            if "Stacked Scores" in comment.body:
-                return comment
+        if comment.author:
+            if comment.author.name == get_bot_username():
+                if "Stacked Scores" in comment.body:
+                    return comment
     return None
 
 
@@ -169,6 +171,13 @@ def get_top(scores_dict):
     score_list = list(scores_dict.items())
     score_list.sort(key=lambda v: -v[1].sum())
     return score_list
+
+
+def nice_index(index: int):
+    for number, ending in [(1, 'st'), (2, 'nd'), (3, 'rd')]:
+        if index % 10 == number and index % 100 != 10+number:
+            return str(index) + ending
+    return str(index) + "th"
 
 
 def get_formatted_body(top10, url=None):

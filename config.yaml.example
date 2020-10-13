@@ -18,10 +18,17 @@ reddit_api:
 #     client_secret: $your_imgur_api_client_secret
 
 ### The series (plural) you want to be tracked
-### List of title&author pairs, where title is a lowercase name without spaces
-### which is guaranteed to be in the title of every post in the series, and the
-### author which is the author of every post in the series.
-### Additionally a regex can be supplied which will be used to match scores
+### Each series entry should have a - followed by these parameters:
+###     title: a string guaranteed to be in every post of the series
+###     author: the author of the series (has to be the same every post)
+###     regex (optional): regex to use in the series (look up online what
+###                       a regex is, or look at the examples)
+###     min (optional): will ignore values below this one
+###     max (optional): will ignore values above this one
+###     goal (optional): highest or lowest (default: highest), whether
+###                      the highest score should be taken, or the
+###                      lowest instead
+###     
 ### Example:
 series:
     - title: October Streak Stacker
