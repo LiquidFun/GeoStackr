@@ -188,7 +188,8 @@ def get_formatted_body(top10, url=None):
     body += "| # | Username | Times Played | Average | **Sum** |\n"
     body += "|:-|:-|-:|-:|-:|\n"
     for index, (user, scores) in enumerate(top10, 1):
-        body += f"| {index} | /u/{user} | {scores.len()} | {scores.avg()} | {scores.sum()} |\n"
+        index_fmt = nice_index(index)
+        body += f"| {index_fmt} | /u/{user} | {scores.len()} | {scores.avg()} | {scores.sum()} |\n"
     now = datetime.utcnow().replace(microsecond=0).isoformat().replace("T", " ")
     body += f"\nUpdated: {now} UTC\n"
     body += get_info_line()
