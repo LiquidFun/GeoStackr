@@ -13,6 +13,7 @@ FIG_PATH = "last_fig.png"
 TOP_COUNT = 20
 TOP_PLOT_COUNT = 5
 SLEEP_INTERVAL_SECONDS = 600
+DEFAULT_REGEX = r"\d{1,3}00"
 
 
 # Load config
@@ -31,10 +32,14 @@ except KeyError:
 
 # Each series to be tracked
 try:
-    SERIES = config['series']
+    SERIES_CONFIGS = config['series']
     print("=== Series found ===")
-    for series in SERIES:
-        print(f"Series title: {series['title']}, author: {series['author']}")
+    for series_config in SERIES_CONFIGS:
+        if 'regex' not in series_config:
+            series['regex'] = DEFAULT_REGEX
+        # print(f"{series_config=}") # Python 3.8 needed :(
+        keyvals = ', '.join([f"{k}='{v}'" for k, v in series_config.items()])
+        print(f"series_config={keyvals}")
     print()
 except KeyError:
     print(f"No series defined in {CONFIG}!")
@@ -122,27 +127,33 @@ def get_info_line():
     return f"\n---\n\n^(I'm a {bot}! | Author: {author} | {source})"
 
 
-def get_score_list(submission):
-    score_list = {}
-    for comment in submission.comments.list():
-        numbers = re.findall(r'\d{2,5}', comment.body)
-        if numbers:
-            if comment.author.name not in ignore_users:
-                highest = max([int(a) for a in numbers])
-                score_list[comment.author.name] = highest
-    return score_list
+def get_goal_function(series_config):
+    return {
+        "highest": max,
+        "lowest": min,
+    }[series_config.get('goal', 'highest')]
 
 
-def get_highest_streak(submission):
+def get_goal_number_from_text(series_config, text):
+    goal_function = get_goal_function(series_config)
+    numbers = [int(a) for a in re.findall(series_config['regex'], text)]
+    if 'min' in series_config:
+        numbers = filter(lambda x: series_config['min'] <= x, numbers)
+    if 'max' in series_config:
+        numbers = filter(lambda x: x <= series_config['max'], numbers)
+    # May return None, needs to be handled
+    if numbers:
+        return goal_function(numbers)
+    return None
+
+
+def get_score_list(submission, series_config):
     score_list = {}
     for comment in submission.comments.list():
-        numbers = re.findall(r'\d{1,5}', comment.body)
-        if numbers:
-            if comment.author.name not in ignore_users:
-                intified = [int(a) for a in numbers]
-                m = max(intified)
-                highest_streak = max(set(intified) - {m} - {m/100})
-                score_list[comment.author.name] = highest_streak
+        if comment.author.name not in ignore_users:
+            number = get_goal_number_from_text(series_config, comment.body)
+            if number:
+                score_list[comment.author.name] = number
     return score_list
 
 
@@ -163,7 +174,7 @@ def get_top(scores_dict):
 def get_formatted_body(top10, url=None):
     body = "Stacked Scores:\n\n"
     if url:
-        body += f"## NEW! [Score history of top 5 participants]({url})\n\n"
+        body += f"[Score history of top 5 participants]({url})\n\n"
     body += "| # | Username | Times Played | Average | **Sum** |\n"
     body += "|:-|:-|-:|-:|-:|\n"
     for index, (user, scores) in enumerate(top10, 1):
@@ -180,8 +191,8 @@ def get_formatted_csv(top):
     return text
 
 
-def merge_scores(scores_dict, submission, series_index: int):
-    sub_scores = get_score_list(submission)
+def merge_scores(scores_dict, submission, series_index: int, series_config):
+    sub_scores = get_score_list(submission, series_config)
     for user, score in sub_scores.items():
         if user not in scores_dict:
             scores_dict[user] = UserScores(user)
@@ -227,14 +238,14 @@ def format_title(title):
     return title.lower().replace(" ", "")
 
 
-def check_submissions_for_series(user, series):
+def check_submissions_for_series(series_config):
     print(str(datetime.now()) + ": Running GeoStackr.")
 
     reddit = get_reddit_instance()
-    redditor = reddit.redditor(user)
+    redditor = reddit.redditor(series_config['author'])
     relevant_submissions = []
     for submission in redditor.submissions.new():
-        if series in format_title(submission.title):
+        if format_title(series_config['title']) in format_title(submission.title):
             relevant_submissions.append(submission)
     relevant_submissions.sort(key=lambda s: s.created_utc)
     scores_dict = {}
@@ -259,12 +270,12 @@ def check_submissions_for_series(user, series):
                     submission.reply(body)
 
         # Get scores
-        merge_scores(scores_dict, submission, series_index)
+        merge_scores(scores_dict, submission, series_index, series_config)
 
 
 def handle_each_series():
-    for series in SERIES:
-        check_submissions_for_series(series['author'], series['title'])
+    for series_config in SERIES_CONFIGS:
+        check_submissions_for_series(series_config)
 
 
 if __name__ == "__main__":

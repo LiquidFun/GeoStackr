@@ -17,13 +17,19 @@ reddit_api:
 #     client_id: $your_imgur_api_client_id
 #     client_secret: $your_imgur_api_client_secret
 
-### The series you want to be tracked
+### The series (plural) you want to be tracked
 ### List of title&author pairs, where title is a lowercase name without spaces
 ### which is guaranteed to be in the title of every post in the series, and the
 ### author which is the author of every post in the series.
+### Additionally a regex can be supplied which will be used to match scores
 ### Example:
 series:
-    - title: octoberstreakstacker
+    - title: October Streak Stacker
       author: olsnes
-    - title: novemberstreakstacker
+      regex: \d{1,3}00 # will match 100, 200 ... 9800, 9900
+    - title: November Streak Stacker
       author: olsnes
+      regex: \d{1,5} # will match # 1, 2 ... 99998, 99999
+      max: 25000 # will then limit the score to 25000 (what the regex can't do)
+      min: 0
+      goal: highest # will maximize the score, so that it matches the regex, but stays within min/max
