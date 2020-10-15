@@ -124,7 +124,7 @@ def get_info_line():
     author = "[LiquidProgrammer](https://www.reddit.com/message/compose/?to=LiquidProgrammer)"
     source = "[Source code](https://github.com/LiquidFun/GeoStackr)"
 
-    return f"\n---\n\n^(I'm a {bot}! | Author: {author} | {source})"
+    return f"\n---\n\n^(I'm a )^{bot}^(! | Author: )^{author}^( | )^{source})"
 
 
 def get_goal_function(series_config):
