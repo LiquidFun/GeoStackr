@@ -235,8 +235,8 @@ def save_plot(scores_dict, series_index: int):
     from labellines import labelLines
     # Doesn't make much sense to plot anything if there is only 1 post
     if series_index <= 2:
-        return None
-    plt.rcParams.update({'font.size': 8})
+        return False
+    plt.rcParams.update({'font.size': 6})
     plt.title(f"Score History for Current Top {TOP_PLOT_COUNT} Participants")
     plt.ylabel("Stacked scores")
     plt.xlabel("Post number")
@@ -255,6 +255,7 @@ def save_plot(scores_dict, series_index: int):
     # plt.legend(loc="upper left")
     plt.savefig(FIG_PATH, dpi=300)
     plt.close()
+    return True
 
 
 def upload_to_imgur():
@@ -277,8 +278,8 @@ def if_graph_needs_update(body, top):
 
 def save_plot_and_get_url(top, series_index):
     if IMGUR_API:
-        save_plot(top, series_index)
-        return upload_to_imgur()
+        if save_plot(top, series_index):
+            return upload_to_imgur()
     return None
 
 
@@ -295,6 +296,9 @@ def check_submissions_for_series(series_config):
     scores_dict = {}
     for series_index, submission in enumerate(relevant_submissions, 1):
         print(f"\n{submission.title}: ")
+        # Get scores
+        merge_scores(scores_dict, submission, series_index, series_config)
+
         # Check if should post
         if scores_dict:
             top = get_top(scores_dict)
@@ -327,10 +331,6 @@ def check_submissions_for_series(series_config):
                 print(body)
                 if not DEBUG_MODE:
                     comment.edit(body)
-
-
-        # Get scores
-        merge_scores(scores_dict, submission, series_index, series_config)
 
 
 def handle_each_series():
