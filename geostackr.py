@@ -14,7 +14,7 @@ CONFIG = "config.yaml"
 FIG_PATH = "last_fig.png"
 TOP_COUNT = 20
 TOP_PLOT_COUNT = 5
-SLEEP_INTERVAL_SECONDS = 600
+SLEEP_INTERVAL_SECONDS = 300
 DEFAULT_REGEX = r"\d{1,3}00"
 
 
@@ -182,6 +182,8 @@ def get_top(scores_dict):
 
 
 def nice_index(index: int):
+    # Codegolfed solution? 
+    # return str(i)+{1:'st',2:'nd',3:'rd'}.get(i if 9<i%100<14 else i%10,'th')
     for number, ending in [(1, 'st'), (2, 'nd'), (3, 'rd')]:
         if index % 10 == number and index % 100 != 10+number:
             return str(index) + ending
@@ -205,8 +207,8 @@ def get_formatted_table(top):
 def get_formatted_body(top, url=None):
     body = ""
     if url:
-        body += f"[Score history of top 5 participants]({url})\n\n"
-    body += "Stacked Scores:\n\n"
+        body += f"[Score history of top {TOP_PLOT_COUNT} participants]({url})\n\n"
+    body += "Stacked Scores (including current post):\n\n"
     body += get_formatted_table(top)
     now = datetime.utcnow().replace(microsecond=0).isoformat().replace("T", " ")
     body += f"\nUpdated: {now} UTC\n"
@@ -240,7 +242,7 @@ def save_plot(scores_dict, series_index: int):
     plt.title(f"Score History for Current Top {TOP_PLOT_COUNT} Participants")
     plt.ylabel("Stacked scores")
     plt.xlabel("Post number")
-    plt.xticks(list(range(1, series_index)))
+    plt.xticks(list(range(1, series_index+1)))
     plt.margins(x=.15)
     for user, scores in scores_dict[:TOP_PLOT_COUNT]:
         prev_line = plt.plot(scores.x(), scores.y(), ".-", label=user, linewidth=1.5)
@@ -251,7 +253,7 @@ def save_plot(scores_dict, series_index: int):
     # for line in plt.gca().get_lines():
     #     print(line, line.get_data())
     filter_lines_below_2x_values = [l for l in plt.gca().get_lines() if len(l.get_data()[0]) >= 2]
-    labelLines(filter_lines_below_2x_values, zorder=2.5)
+    labelLines(filter_lines_below_2x_values, zorder=2.1)
     # plt.legend(loc="upper left")
     plt.savefig(FIG_PATH, dpi=300)
     plt.close()
