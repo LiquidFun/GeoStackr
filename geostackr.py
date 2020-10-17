@@ -41,7 +41,7 @@ try:
             series_config['regex'] = DEFAULT_REGEX
         # print(f"{series_config=}") # Python 3.8 needed :(
         keyvals = ', '.join([f"{k}='{v}'" for k, v in series_config.items()])
-        print(f"series_config={keyvals}")
+        print(f"series_config={{{keyvals}}}")
     print()
 except KeyError:
     print(f"No series defined in {CONFIG}!")
@@ -142,7 +142,9 @@ def get_goal_function(series_config):
 
 def get_goal_number_from_text(series_config, text):
     goal_function = get_goal_function(series_config)
+    # Use regex in series config
     numbers = [int(a) for a in re.findall(series_config['regex'], text)]
+    # Min and max may not both be defined, so handle separately
     if 'min' in series_config:
         numbers = filter(lambda x: series_config['min'] <= x, numbers)
     if 'max' in series_config:
@@ -186,16 +188,26 @@ def nice_index(index: int):
     return str(index) + "th"
 
 
-def get_formatted_body(top10, url=None):
+def get_formatted_table(top):
+    table = "| # | Username | Times Played | Average | **Sum** |\n"
+    table += "|:-|:-|-:|-:|-:|\n"
+    last_score_and_index = (None, None)
+    for index, (user, scores) in enumerate(top, 1):
+        # Remember score and index if multiple people have the same score, so that each of
+        # them have the same position
+        if last_score_and_index[0] != scores.sum():
+            last_score_and_index = (scores.sum(), index)
+        index_fmt = nice_index(last_score_and_index[1])
+        table += f"| {index_fmt} | /u/{user} | {scores.len()} | {scores.avg()} | {scores.sum()} |\n"
+    return table
+
+
+def get_formatted_body(top, url=None):
     body = ""
     if url:
         body += f"[Score history of top 5 participants]({url})\n\n"
     body += "Stacked Scores:\n\n"
-    body += "| # | Username | Times Played | Average | **Sum** |\n"
-    body += "|:-|:-|-:|-:|-:|\n"
-    for index, (user, scores) in enumerate(top10, 1):
-        index_fmt = nice_index(index)
-        body += f"| {index_fmt} | /u/{user} | {scores.len()} | {scores.avg()} | {scores.sum()} |\n"
+    body += get_formatted_table(top)
     now = datetime.utcnow().replace(microsecond=0).isoformat().replace("T", " ")
     body += f"\nUpdated: {now} UTC\n"
     body += get_info_line()
@@ -257,6 +269,19 @@ def format_title(title):
     return title.lower().replace(" ", "")
 
 
+def if_graph_needs_update(body, top):
+    pattern = re.compile(r"\d+ \|$", re.MULTILINE)
+    matches = re.findall(pattern, body)[:TOP_PLOT_COUNT]
+    return any([s[1].sum() != int(c.replace("|", "")) for s, c in zip(top, matches)])
+
+
+def save_plot_and_get_url(top, series_index):
+    if IMGUR_API:
+        save_plot(top, series_index)
+        return upload_to_imgur()
+    return None
+
+
 def check_submissions_for_series(series_config):
     print(str(datetime.now()) + ": Running GeoStackr.")
 
@@ -274,28 +299,30 @@ def check_submissions_for_series(series_config):
         if scores_dict:
             top = get_top(scores_dict)
             comment = get_already_posted_comment(submission)
+
             # Post new if not already there
             if comment is None:
                 print("\n\n\n=== POSTING NEW COMMENT ===")
-                url = None
-                if IMGUR_API:
-                    save_plot(top, series_index)
-                    url = upload_to_imgur()
                 csv = get_formatted_csv(top)
                 print(csv)
                 subject = f'Statistics for "{submission.title}"'
+                url = save_plot_and_get_url(top, series_index)
                 body = get_formatted_body(top[:TOP_COUNT], url=url)
                 print(body)
-                # sys.exit()
                 if not DEBUG_MODE:
                     redditor.message(subject, csv)
                     submission.reply(body)
+
             # If comment exists then edit it instead
             else:
-                print("\n\n\n=== EDITING ===")
-                url = re.search(r'https:\/\/i\.imgur\.com\/.*\.png', comment.body)
-                if url:
-                    url = url.group(0)
+                print("\n\n\n=== EDITING COMMENT ===")
+                if if_graph_needs_update(comment.body, top):
+                    print("=== Updating graph ===")
+                    url = save_plot_and_get_url(top, series_index)
+                else:
+                    url = re.search(r'https:\/\/i\.imgur\.com\/.*\.png', comment.body)
+                    if url:
+                        url = url.group(0)
                 body = get_formatted_body(top[:TOP_COUNT], url=url)
                 print(body)
                 if not DEBUG_MODE:

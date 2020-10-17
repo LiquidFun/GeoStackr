@@ -22,6 +22,8 @@ Furthermore generates fancy graphs of the progression of the top 5 participants 
 
 `pip3 install --user -r requirements.txt`
 
+![](requirements.txt)
+
 Note that Python 3.6 is required due to f-strings
 
 ## Run it in a `tmux` or `screen` session on your server:
