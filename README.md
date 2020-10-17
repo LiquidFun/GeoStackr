@@ -6,7 +6,7 @@ See [this post](https://www.reddit.com/r/geoguessr/comments/jcs257/3_october_str
 
 Furthermore generates fancy graphs of the progression of the top 5 participants like this:
 
-![media/graph.png]
+![Graph of top 5 participants of a series](media/graph.png)
 
 
 # Running it
