@@ -1,3 +1,5 @@
+#!/bin/python3
+
 import sys
 import re
 import time
@@ -120,11 +122,15 @@ ignore_users = {get_bot_username(), "GeoGuessrTrackingBot"}
 
 
 def get_info_line():
-    bot = "[bot](https://xkcd.com/1646/)"
-    author = "[LiquidProgrammer](https://www.reddit.com/message/compose/?to=LiquidProgrammer)"
-    source = "[Source code](https://github.com/LiquidFun/GeoStackr)"
+    return """
+---
 
-    return f"\n---\n\n^(I'm a )^{bot}^(! | Author: )^{author}^( | )^{source})"
+^(I'm a [bot][1]! | Author: [LiquidProgrammer][2] | [Source code][3])
+
+[1]: https://xkcd.com/1646/
+[2]: https://www.reddit.com/message/compose/?to=LiquidProgrammer
+[3]: https://github.com/LiquidFun/GeoStackr
+"""
 
 
 def get_goal_function(series_config):
@@ -307,8 +313,10 @@ def handle_each_series():
 
 if __name__ == "__main__":
     if DEBUG_MODE:
+        print("Script running in DEBUG_MODE. No changes to reddit will be commited.")
         handle_each_series()
     else:
+        print("Script running without DEBUG_MODE. Changes will be applied to reddit.")
         while True:
             try:
                 handle_each_series()

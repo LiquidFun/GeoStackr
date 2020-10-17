@@ -2,7 +2,11 @@
 
 A bot which posts stacked (added) scores to [/r/geoguessr](https://reddit.com/r/geoguessr) for series as specified in the `config.yaml`.
 
-See [this post](https://www.reddit.com/r/geoguessr/comments/j6wzvj/3_october_streak_stacker_2/g87hqfh?utm_source=share&utm_medium=web2x&context=3) for an example.
+See [this post](https://www.reddit.com/r/geoguessr/comments/jcs257/3_october_streak_stacker_7/g9373r3?utm_source=share&utm_medium=web2x&context=3) for an example.
+
+Furthermore generates fancy graphs of the progression of the top 5 participants like this:
+
+![media/graph.png]
 
 
 # Running it
@@ -12,10 +16,13 @@ See [this post](https://www.reddit.com/r/geoguessr/comments/j6wzvj/3_october_str
 * Add the reddit api keys, username and password of the bot account.
 * Add the series name and author in the series dict
 * Set debug to `True` if you want to make a single test-run to see what it would do
+* [Optional]: Add imgur API keys for the bot to add top 5 lists
 
 ## Install the requirements using pip:
 
 `pip3 install --user -r requirements.txt`
+
+Note that Python 3.6 is required due to f-strings
 
 ## Run it in a `tmux` or `screen` session on your server:
 
