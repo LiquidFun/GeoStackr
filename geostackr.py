@@ -12,9 +12,11 @@ import yaml
 # Change these if you want to run it for a different series
 CONFIG = "config.yaml"
 FIG_PATH = "last_fig.png"
-TOP_COUNT = 20
-TOP_PLOT_COUNT = 5
+AUTHOR = "LiquidProgrammer"
 SLEEP_INTERVAL_SECONDS = 300
+
+DEFAULT_TOP_COUNT = 20
+DEFAULT_TOP_PLOT_COUNT = 5
 DEFAULT_REGEX = r"\d{1,3}00"
 
 
@@ -204,14 +206,17 @@ def get_formatted_table(top):
     return table
 
 
+def get_iso_date():
+    return datetime.utcnow().replace(microsecond=0).isoformat().replace("T", " ")
+
+
 def get_formatted_body(top, url=None):
     body = ""
     if url:
-        body += f"[Score history of top {TOP_PLOT_COUNT} participants]({url})\n\n"
+        body += f"[Score history of top {DEFAULT_TOP_PLOT_COUNT} participants]({url})\n\n"
     body += "Stacked Scores (including current post):\n\n"
     body += get_formatted_table(top)
-    now = datetime.utcnow().replace(microsecond=0).isoformat().replace("T", " ")
-    body += f"\nUpdated: {now} UTC\n"
+    body += f"\nUpdated: {get_iso_date()} UTC\n"
     body += get_info_line()
     return body
 
@@ -239,12 +244,12 @@ def save_plot(scores_dict, series_index: int):
     if series_index <= 2:
         return False
     plt.rcParams.update({'font.size': 6})
-    plt.title(f"Score History for Current Top {TOP_PLOT_COUNT} Participants")
+    plt.title(f"Score History for Current Top {DEFAULT_TOP_PLOT_COUNT} Participants")
     plt.ylabel("Stacked scores")
     plt.xlabel("Post number")
     plt.xticks(list(range(1, series_index+1)))
     plt.margins(x=.15)
-    for user, scores in scores_dict[:TOP_PLOT_COUNT]:
+    for user, scores in scores_dict[:DEFAULT_TOP_PLOT_COUNT]:
         prev_line = plt.plot(scores.x(), scores.y(), ".-", label=user, linewidth=1.5)
         x_offset = 0.01 * series_index
         plt.text(scores.x()[-1]+x_offset, scores.y()[-1],
@@ -274,7 +279,7 @@ def format_title(title):
 
 def if_graph_needs_update(body, top):
     pattern = re.compile(r"\d+ \|$", re.MULTILINE)
-    matches = re.findall(pattern, body)[:TOP_PLOT_COUNT]
+    matches = re.findall(pattern, body)[:DEFAULT_TOP_PLOT_COUNT]
     return any([s[1].sum() != int(c.replace("|", "")) for s, c in zip(top, matches)])
 
 
@@ -313,7 +318,7 @@ def check_submissions_for_series(series_config):
                 print(csv)
                 subject = f'Statistics for "{submission.title}"'
                 url = save_plot_and_get_url(top, series_index)
-                body = get_formatted_body(top[:TOP_COUNT], url=url)
+                body = get_formatted_body(top[:DEFAULT_TOP_COUNT], url=url)
                 print(body)
                 if not DEBUG_MODE:
                     redditor.message(subject, csv)
@@ -329,7 +334,7 @@ def check_submissions_for_series(series_config):
                     url = re.search(r'https:\/\/i\.imgur\.com\/.*\.png', comment.body)
                     if url:
                         url = url.group(0)
-                body = get_formatted_body(top[:TOP_COUNT], url=url)
+                body = get_formatted_body(top[:DEFAULT_TOP_COUNT], url=url)
                 print(body)
                 if not DEBUG_MODE:
                     comment.edit(body)
@@ -338,6 +343,16 @@ def check_submissions_for_series(series_config):
 def handle_each_series():
     for series_config in SERIES_CONFIGS:
         check_submissions_for_series(series_config)
+
+
+def message_author_about_error(exception):
+    import traceback
+    subject = f"{get_iso_date()} Error with GeoStackr Bot"
+    body = traceback.format_exc()
+    print(f"Sending message to author: {AUTHOR}")
+    print(subject)
+    print(body, "\n")
+    get_reddit_instance().redditor(AUTHOR).message(subject, body)
 
 
 if __name__ == "__main__":
@@ -351,7 +366,7 @@ if __name__ == "__main__":
                 handle_each_series()
             except Exception as e:
                 print("Found error, skipping this loop. ")
-                print(str(e))
+                message_author_about_error(e)
             sleep_message = "Sleeping for " + str(SLEEP_INTERVAL_SECONDS / 60) + " minutes"
             print(sleep_message)
             print("=" * len(sleep_message))
