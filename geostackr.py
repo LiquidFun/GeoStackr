@@ -12,12 +12,7 @@ import yaml
 # Change these if you want to run it for a different series
 CONFIG = "config.yaml"
 FIG_PATH = "last_fig.png"
-AUTHOR = "LiquidProgrammer"
 SLEEP_INTERVAL_SECONDS = 300
-
-DEFAULT_TOP_COUNT = 20
-DEFAULT_TOP_PLOT_COUNT = 5
-DEFAULT_REGEX = r"\d{1,3}00"
 
 
 # Load config
@@ -34,26 +29,23 @@ except KeyError:
     print(f"Setting 'debug' to 'True' since it is not defined in {CONFIG}")
     DEBUG_MODE = True
 
-# Each series to be tracked
-try:
-    SERIES_CONFIGS = config['series']
-    print("=== Series found ===")
-    for series_config in SERIES_CONFIGS:
-        if 'regex' not in series_config:
-            series_config['regex'] = DEFAULT_REGEX
-        # print(f"{series_config=}") # Python 3.8 needed :(
-        keyvals = ', '.join([f"{k}='{v}'" for k, v in series_config.items()])
-        print(f"series_config={{{keyvals}}}")
-    print()
-except KeyError:
-    print(f"No series defined in {CONFIG}!")
-    sys.exit(1)
+for required_in_config in ["defaults", "reddit_api", "series"]:
+    if required_in_config not in config:
+        print(f"'{required_in_config}' not defined in {CONFIG}")
+        sys.exit(1)
 
-try:
-    REDDIT_API = config['reddit_api']
-except KeyError:
-    print(f"reddit_api not defined in {CONFIG}!")
-    sys.exit(1)
+DEFAULTS = config['defaults']
+REDDIT_API = config['reddit_api']
+SERIES_CONFIGS = config['series']
+
+print("=== Series found ===")
+for series_config in SERIES_CONFIGS:
+    if 'regex' not in series_config:
+        series_config['regex'] = DEFAULTS['regex']
+    # print(f"{series_config=}") # Python 3.8 needed :(
+    keyvals = ', '.join([f"{k}='{v}'" for k, v in series_config.items()])
+    print(f"series_config={{{keyvals}}}")
+print()
 
 try:
     IMGUR_API = config['imgur_api']
@@ -213,7 +205,7 @@ def get_iso_date():
 def get_formatted_body(top, url=None):
     body = ""
     if url:
-        body += f"[Score history of top {DEFAULT_TOP_PLOT_COUNT} participants]({url})\n\n"
+        body += f"[Score history of top {DEFAULTS['top_count']} participants]({url})\n\n"
     body += "Stacked Scores (including current post):\n\n"
     body += get_formatted_table(top)
     body += f"\nUpdated: {get_iso_date()} UTC\n"
@@ -244,12 +236,12 @@ def save_plot(scores_dict, series_index: int):
     if series_index <= 2:
         return False
     plt.rcParams.update({'font.size': 6})
-    plt.title(f"Score History for Current Top {DEFAULT_TOP_PLOT_COUNT} Participants")
+    plt.title(f"Score History for Current Top {DEFAULTS['top_plot_count']} Participants")
     plt.ylabel("Stacked scores")
     plt.xlabel("Post number")
     plt.xticks(list(range(1, series_index+1)))
     plt.margins(x=.15)
-    for user, scores in scores_dict[:DEFAULT_TOP_PLOT_COUNT]:
+    for user, scores in scores_dict[:DEFAULTS['top_plot_count']]:
         prev_line = plt.plot(scores.x(), scores.y(), ".-", label=user, linewidth=1.5)
         x_offset = 0.01 * series_index
         plt.text(scores.x()[-1]+x_offset, scores.y()[-1],
@@ -258,8 +250,12 @@ def save_plot(scores_dict, series_index: int):
     # for line in plt.gca().get_lines():
     #     print(line, line.get_data())
     filter_lines_below_2x_values = [l for l in plt.gca().get_lines() if len(l.get_data()[0]) >= 2]
-    labelLines(filter_lines_below_2x_values, zorder=2.1)
-    # plt.legend(loc="upper left")
+    # print(filter_lines_below_2x_values)
+    plt.legend(loc="upper left")
+    try:
+        labelLines(filter_lines_below_2x_values, zorder=2.5)
+    except:
+        pass
     plt.savefig(FIG_PATH, dpi=300)
     plt.close()
     return True
@@ -279,7 +275,7 @@ def format_title(title):
 
 def if_graph_needs_update(body, top):
     pattern = re.compile(r"\d+ \|$", re.MULTILINE)
-    matches = re.findall(pattern, body)[:DEFAULT_TOP_PLOT_COUNT]
+    matches = re.findall(pattern, body)[:DEFAULTS['top_plot_count']]
     return any([s[1].sum() != int(c.replace("|", "")) for s, c in zip(top, matches)])
 
 
@@ -318,7 +314,7 @@ def check_submissions_for_series(series_config):
                 print(csv)
                 subject = f'Statistics for "{submission.title}"'
                 url = save_plot_and_get_url(top, series_index)
-                body = get_formatted_body(top[:DEFAULT_TOP_COUNT], url=url)
+                body = get_formatted_body(top[:DEFAULTS['top_count']], url=url)
                 print(body)
                 if not DEBUG_MODE:
                     redditor.message(subject, csv)
@@ -334,7 +330,7 @@ def check_submissions_for_series(series_config):
                     url = re.search(r'https:\/\/i\.imgur\.com\/.*\.png', comment.body)
                     if url:
                         url = url.group(0)
-                body = get_formatted_body(top[:DEFAULT_TOP_COUNT], url=url)
+                body = get_formatted_body(top[:DEFAULTS['top_count']], url=url)
                 print(body)
                 if not DEBUG_MODE:
                     comment.edit(body)
@@ -349,10 +345,11 @@ def message_author_about_error(exception):
     import traceback
     subject = f"{get_iso_date()} Error with GeoStackr Bot"
     body = traceback.format_exc()
-    print(f"Sending message to author: {AUTHOR}")
+    user = config['username_to_message_in_case_of_errors']
+    print(f"Sending message to author: {user}")
     print(subject)
     print(body, "\n")
-    get_reddit_instance().redditor(AUTHOR).message(subject, body)
+    get_reddit_instance().redditor(user).message(subject, body)
 
 
 if __name__ == "__main__":

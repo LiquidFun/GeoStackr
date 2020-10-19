@@ -17,6 +17,16 @@ reddit_api:
 #     client_id: $your_imgur_api_client_id
 #     client_secret: $your_imgur_api_client_secret
 
+# User which will receive messages when there are errors
+# if left out then no message will be sent
+username_to_message_in_case_of_errors: LiquidProgrammer
+
+# Default values for all series if not supplied
+defaults:
+    top_count: 20
+    top_plot_count: 5
+    regex: \d{1,3}00
+
 ### The series (plural) you want to be tracked
 ### Each series entry should have a - followed by these parameters:
 ###     title: a string guaranteed to be in every post of the series
