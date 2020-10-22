@@ -96,7 +96,7 @@ class UserScores:
         return self._xy()['y']
 
 
-def get_reddit_instance() -> praw.reddit.Reddit:
+def get_reddit_instance():
     # Get an authenticated reddit instance from praw by using the config
     return praw.Reddit(
         client_id=REDDIT_API['client_id'],
@@ -150,7 +150,7 @@ def get_goal_number_from_text(series_config, text) -> Optional[int]:
     return None
 
 
-def get_score_list(submission: praw.reddit.Submission, series_config: Dict[str, UserScores]) -> Dict[str, int]:
+def get_score_list(submission, series_config: Dict[str, UserScores]) -> Dict[str, int]:
     score_list: Dict[str, int] = {}
     for comment in submission.comments.list():
         if comment.author:
@@ -161,7 +161,7 @@ def get_score_list(submission: praw.reddit.Submission, series_config: Dict[str, 
     return score_list
 
 
-def get_already_posted_comment(submission: praw.reddit.Submission) -> Optional[praw.reddit.Comment]:
+def get_already_posted_comment(submission):
     for comment in submission.comments:
         if comment.author:
             if comment.author.name == get_bot_username():
@@ -332,7 +332,7 @@ def check_submissions_for_series(series_config):
         # Check if should post
         if scores_dict:
             top: List[Tuple[str, UserScores]] = get_top(scores_dict)
-            comment: Optional[praw.reddit.Comment] = get_already_posted_comment(submission)
+            comment = get_already_posted_comment(submission)
 
             # Post new if not already there
             if comment is None:
