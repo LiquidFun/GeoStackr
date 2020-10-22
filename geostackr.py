@@ -3,6 +3,7 @@
 import sys
 import re
 import time
+from typing import Dict, List, Optional, Callable, Any, Tuple
 from datetime import datetime
 
 import praw
@@ -22,28 +23,24 @@ except IOError:
     print(f"Could not load {CONFIG}. Make sure to rename it from {CONFIG}.example to {CONFIG}!")
     sys.exit(1)
 
-# In debug mode nothing commiting will be done (i.e. no posts on reddit). Only prints to stdout
-try:
-    DEBUG_MODE = config['debug']
-except KeyError:
-    print(f"Setting 'debug' to 'True' since it is not defined in {CONFIG}")
-    DEBUG_MODE = True
-
-for required_in_config in ["defaults", "reddit_api", "series"]:
+# Check if all keys required to be in config are there
+for required_in_config in ["defaults", "reddit_api", "series", "debug"]:
     if required_in_config not in config:
         print(f"'{required_in_config}' not defined in {CONFIG}")
         sys.exit(1)
 
+# In debug mode nothing committing will be done (i.e. no posts on reddit). Only prints to stdout
+DEBUG_MODE = config['debug']
 DEFAULTS = config['defaults']
 REDDIT_API = config['reddit_api']
 SERIES_CONFIGS = config['series']
 
 print("=== Series found ===")
-for series_config in SERIES_CONFIGS:
-    if 'regex' not in series_config:
-        series_config['regex'] = DEFAULTS['regex']
+for current_series_config in SERIES_CONFIGS:
+    if 'regex' not in current_series_config:
+        current_series_config['regex'] = DEFAULTS['regex']
     # print(f"{series_config=}") # Python 3.8 needed :(
-    keyvals = ', '.join([f"{k}='{v}'" for k, v in series_config.items()])
+    keyvals = ', '.join([f"{k}='{v}'" for k, v in current_series_config.items()])
     print(f"series_config={{{keyvals}}}")
 print()
 
@@ -55,26 +52,29 @@ except KeyError:
 
 
 class UserScores:
-    def __init__(self, author):
+    def __init__(self, author: str):
         self.scores = {}
         self.author = author
+
+    def __getitem__(self, item: int) -> int:
+        return self.scores.get(item, 0)
 
     def add(self, round_index: int, score: int):
         self.scores[round_index] = score
 
-    def sum(self):
+    def sum(self) -> int:
         return sum(self.scores.values())
 
-    def len(self):
+    def len(self) -> int:
         return len(self.scores)
 
-    def avg(self):
+    def avg(self) -> int:
         return self.sum()//self.len()
 
-    def last(self):
+    def last(self) -> int:
         return self.scores[max(self.scores)]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str(self.scores)
 
     def _xy(self):
@@ -96,8 +96,8 @@ class UserScores:
         return self._xy()['y']
 
 
-def get_reddit_instance():
-    # Get reddit instance
+def get_reddit_instance() -> praw.reddit.Reddit:
+    # Get an authenticated reddit instance from praw by using the config
     return praw.Reddit(
         client_id=REDDIT_API['client_id'],
         client_secret=REDDIT_API['client_secret'],
@@ -107,15 +107,16 @@ def get_reddit_instance():
     )
 
 
-# Get the username of the bot which is currently logged in
-def get_bot_username():
+def get_bot_username() -> str:
+    """Get the username of the bot which is currently logged in
+    """
     return config['reddit_api']['username']
 
 
 ignore_users = {get_bot_username(), "GeoGuessrTrackingBot"}
 
 
-def get_info_line():
+def get_info_line() -> str:
     return """
 ---
 
@@ -127,14 +128,14 @@ def get_info_line():
 """
 
 
-def get_goal_function(series_config):
+def get_goal_function(series_config: Dict[str, Any]) -> Callable[[int, int], int]:
     return {
         "highest": max,
         "lowest": min,
     }[series_config.get('goal', 'highest')]
 
 
-def get_goal_number_from_text(series_config, text):
+def get_goal_number_from_text(series_config, text) -> Optional[int]:
     goal_function = get_goal_function(series_config)
     # Use regex in series config
     numbers = [int(a) for a in re.findall(series_config['regex'], text)]
@@ -149,8 +150,8 @@ def get_goal_number_from_text(series_config, text):
     return None
 
 
-def get_score_list(submission, series_config):
-    score_list = {}
+def get_score_list(submission: praw.reddit.Submission, series_config: Dict[str, UserScores]) -> Dict[str, int]:
+    score_list: Dict[str, int] = {}
     for comment in submission.comments.list():
         if comment.author:
             if comment.author.name not in ignore_users:
@@ -160,7 +161,7 @@ def get_score_list(submission, series_config):
     return score_list
 
 
-def get_already_posted_comment(submission):
+def get_already_posted_comment(submission: praw.reddit.Submission) -> Optional[praw.reddit.Comment]:
     for comment in submission.comments:
         if comment.author:
             if comment.author.name == get_bot_username():
@@ -169,19 +170,16 @@ def get_already_posted_comment(submission):
     return None
 
 
-def get_top(scores_dict):
-    score_list = list(scores_dict.items())
+def get_top(scores_dict: Dict[str, UserScores]) -> List[Tuple[str, UserScores]]:
+    """Returns a the scores dict as a sorted list of tuples"""
+    score_list: List[Tuple[str, UserScores]] = list(scores_dict.items())
+    # TODO: sort depending on config goal option
     score_list.sort(key=lambda v: -v[1].sum())
     return score_list
 
 
-def nice_index(index: int):
-    # Codegolfed solution? 
-    # return str(i)+{1:'st',2:'nd',3:'rd'}.get(i if 9<i%100<14 else i%10,'th')
-    for number, ending in [(1, 'st'), (2, 'nd'), (3, 'rd')]:
-        if index % 10 == number and index % 100 != 10+number:
-            return str(index) + ending
-    return str(index) + "th"
+def add_ordinal_suffix(i: int) -> str:
+    return str(i) + {1: 'st', 2: 'nd', 3: 'rd'}.get(i if i%100 < 20 else i%10, 'th')
 
 
 def get_formatted_table(top):
@@ -193,7 +191,7 @@ def get_formatted_table(top):
         # them have the same position
         if last_score_and_index[0] != scores.sum():
             last_score_and_index = (scores.sum(), index)
-        index_fmt = nice_index(last_score_and_index[1])
+        index_fmt = add_ordinal_suffix(last_score_and_index[1])
         table += f"| {index_fmt} | /u/{user} | {scores.len()} | {scores.avg()} | {scores.sum()} |\n"
     return table
 
@@ -202,10 +200,11 @@ def get_iso_date():
     return datetime.utcnow().replace(microsecond=0).isoformat().replace("T", " ")
 
 
-def get_formatted_body(top, url=None):
+def get_formatted_body(top, urls=[]):
     body = ""
-    if url:
-        body += f"[Score history of top {DEFAULTS['top_plot_count']} participants]({url})\n\n"
+    for url in urls:
+        body += url + "\n\n"
+        # body += f"[Score history of top {DEFAULTS['top_plot_count']} participants]({url})\n\n"
     body += "Stacked Scores (including current post):\n\n"
     body += get_formatted_table(top)
     body += f"\nUpdated: {get_iso_date()} UTC\n"
@@ -229,19 +228,20 @@ def merge_scores(scores_dict, submission, series_index: int, series_config):
         scores_dict.get(user).add(series_index, score)
 
 
-def save_plot(scores_dict, series_index: int):
+def save_line_plot(scores_list: List[Tuple[str, UserScores]], series_index: int) -> str:
     from matplotlib import pyplot as plt
     from labellines import labelLines
     # Doesn't make much sense to plot anything if there is only 1 post
     if series_index <= 2:
-        return False
+        return ""
+    title = f"Score History for Current Top {DEFAULTS['top_plot_count']} Participants"
     plt.rcParams.update({'font.size': 6})
-    plt.title(f"Score History for Current Top {DEFAULTS['top_plot_count']} Participants")
+    plt.title(title)
     plt.ylabel("Stacked scores")
     plt.xlabel("Post number")
     plt.xticks(list(range(1, series_index+1)))
     plt.margins(x=.15)
-    for user, scores in scores_dict[:DEFAULTS['top_plot_count']]:
+    for user, scores in scores_list[:DEFAULTS['top_plot_count']]:
         prev_line = plt.plot(scores.x(), scores.y(), ".-", label=user, linewidth=1.5)
         x_offset = 0.01 * series_index
         plt.text(scores.x()[-1]+x_offset, scores.y()[-1],
@@ -255,13 +255,36 @@ def save_plot(scores_dict, series_index: int):
     try:
         labelLines(filter_lines_below_2x_values, zorder=2.5)
     except:
-        pass
+        return ""
     plt.savefig(FIG_PATH, dpi=300)
     plt.close()
-    return True
+    return title
 
 
-def upload_to_imgur():
+def save_bar_plot(scores_list: List[Tuple[str, UserScores]], series_index: int) -> str:
+    from matplotlib import pyplot as plt
+    scores_list = list(reversed(scores_list[:DEFAULTS['top_count']]))
+    title = f"Bar Plot for Current Top {len(scores_list)} Participants' Scores"
+    plt.rcParams.update({'font.size': 6})
+    plt.title(title)
+    plt.gcf().subplots_adjust(bottom=0.25)
+    plt.ylabel("Stacked scores")
+    plt.xlabel("Username")
+    plt.xticks(list(range(len(scores_list))), [label for label, _ in scores_list], rotation=45)
+    prev = [0] * len(scores_list)
+    bars = []
+    for i in range(1, series_index+1):
+        bar_scores = [user_scores[i] for _, user_scores in scores_list]
+        bars.append(plt.bar(range(20), bar_scores, bottom=prev, width=0.55))
+        prev = [a + b for a, b in zip(prev, bar_scores)]
+    plt.legend((b[0] for b in bars), (f"Round #{r}" for r in range(1, len(bars)+1)), loc="upper left")
+    plt.savefig(FIG_PATH, dpi=300)
+    plt.close()
+    return title
+
+
+def upload_to_imgur() -> str:
+    """Uploads the locally saved figure to imgur"""
     from imgurpython import ImgurClient
     client = ImgurClient(IMGUR_API['client_id'], IMGUR_API['client_secret'])
     url = client.upload_from_path(FIG_PATH)['link']
@@ -269,21 +292,25 @@ def upload_to_imgur():
     return url
 
 
-def format_title(title):
-    return title.lower().replace(" ", "")
+def format_title(title: str):
+    """Formats title by making it lowercase and removing all spaces"""
+    return title.lower().replace(" ", "").strip()
 
 
-def if_graph_needs_update(body, top):
+def if_graph_needs_update(body: str, top: List[Tuple[str, UserScores]]) -> bool:
+    """Returns True if at least a single score needs an update"""
     pattern = re.compile(r"\d+ \|$", re.MULTILINE)
-    matches = re.findall(pattern, body)[:DEFAULTS['top_plot_count']]
+    matches = re.findall(pattern, body)[:DEFAULTS['top_count']]
     return any([s[1].sum() != int(c.replace("|", "")) for s, c in zip(top, matches)])
 
 
-def save_plot_and_get_url(top, series_index):
+def save_plots_and_get_urls(top_list: List[Tuple[str, UserScores]], series_index) -> List[str]:
+    """Goes over every plot function, creates the url and uploads it to imgur"""
+    formatted_urls: List[str] = []
     if IMGUR_API:
-        if save_plot(top, series_index):
-            return upload_to_imgur()
-    return None
+        for plot_function in [save_line_plot, save_bar_plot]:
+            formatted_urls.append(f"[{plot_function(top_list, series_index)}]({upload_to_imgur()})")
+    return formatted_urls
 
 
 def check_submissions_for_series(series_config):
@@ -296,7 +323,7 @@ def check_submissions_for_series(series_config):
         if format_title(series_config['title']) in format_title(submission.title):
             relevant_submissions.append(submission)
     relevant_submissions.sort(key=lambda s: s.created_utc)
-    scores_dict = {}
+    scores_dict: Dict[str, UserScores] = {}
     for series_index, submission in enumerate(relevant_submissions, 1):
         print(f"\n{submission.title}: ")
         # Get scores
@@ -304,8 +331,8 @@ def check_submissions_for_series(series_config):
 
         # Check if should post
         if scores_dict:
-            top = get_top(scores_dict)
-            comment = get_already_posted_comment(submission)
+            top: List[Tuple[str, UserScores]] = get_top(scores_dict)
+            comment: Optional[praw.reddit.Comment] = get_already_posted_comment(submission)
 
             # Post new if not already there
             if comment is None:
@@ -313,8 +340,8 @@ def check_submissions_for_series(series_config):
                 csv = get_formatted_csv(top)
                 print(csv)
                 subject = f'Statistics for "{submission.title}"'
-                url = save_plot_and_get_url(top, series_index)
-                body = get_formatted_body(top[:DEFAULTS['top_count']], url=url)
+                urls = save_plots_and_get_urls(top, series_index)
+                body = get_formatted_body(top[:DEFAULTS['top_count']], urls=urls)
                 print(body)
                 if not DEBUG_MODE:
                     redditor.message(subject, csv)
@@ -325,12 +352,10 @@ def check_submissions_for_series(series_config):
                 print("\n\n\n=== EDITING COMMENT ===")
                 if if_graph_needs_update(comment.body, top):
                     print("=== Updating graph ===")
-                    url = save_plot_and_get_url(top, series_index)
+                    urls = save_plots_and_get_urls(top, series_index)
                 else:
-                    url = re.search(r'https:\/\/i\.imgur\.com\/.*\.png', comment.body)
-                    if url:
-                        url = url.group(0)
-                body = get_formatted_body(top[:DEFAULTS['top_count']], url=url)
+                    urls = re.findall(r'\[.*]\(https://i\.imgur\.com/.*\.png\)', comment.body)
+                body = get_formatted_body(top[:DEFAULTS['top_count']], urls=urls)
                 print(body)
                 if not DEBUG_MODE:
                     comment.edit(body)
