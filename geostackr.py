@@ -205,7 +205,7 @@ def get_iso_date():
 def get_formatted_body(top, url=None):
     body = ""
     if url:
-        body += f"[Score history of top {DEFAULTS['top_count']} participants]({url})\n\n"
+        body += f"[Score history of top {DEFAULTS['top_plot_count']} participants]({url})\n\n"
     body += "Stacked Scores (including current post):\n\n"
     body += get_formatted_table(top)
     body += f"\nUpdated: {get_iso_date()} UTC\n"
