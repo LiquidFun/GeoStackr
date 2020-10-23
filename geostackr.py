@@ -256,7 +256,7 @@ def save_line_plot(scores_list: List[Tuple[str, UserScores]], series_index: int)
     try:
         labelLines(filter_lines_below_2x_values, zorder=2.5)
     except:
-        return ""
+        pass
     plt.savefig(FIG_PATH, dpi=300)
     plt.close()
     return title
