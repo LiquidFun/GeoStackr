@@ -3,6 +3,7 @@
 import sys
 import re
 import time
+from numbers import Number
 from typing import Dict, List, Optional, Callable, Any, Tuple
 from datetime import datetime
 
@@ -128,14 +129,14 @@ def get_info_line() -> str:
 """
 
 
-def get_goal_function(series_config: Dict[str, Any]) -> Callable[[int, int], int]:
+def get_goal_function(series_config: Dict[str, Any]) -> Callable[[Number, Number], Number]:
     return {
         "highest": max,
         "lowest": min,
     }[series_config.get('goal', 'highest')]
 
 
-def get_goal_number_from_text(series_config, text) -> Optional[int]:
+def get_goal_number_from_text(series_config, text) -> Optional[Number]:
     goal_function = get_goal_function(series_config)
     # Use regex in series config
     numbers = [int(a) for a in re.findall(series_config['regex'], text)]
@@ -150,8 +151,8 @@ def get_goal_number_from_text(series_config, text) -> Optional[int]:
     return None
 
 
-def get_score_list(submission, series_config: Dict[str, UserScores]) -> Dict[str, int]:
-    score_list: Dict[str, int] = {}
+def get_score_list(submission, series_config: Dict[str, UserScores]) -> Dict[str, Number]:
+    score_list: Dict[str, Number] = {}
     for comment in submission.comments.list():
         if comment.author:
             if comment.author.name not in ignore_users:
@@ -270,14 +271,14 @@ def save_bar_plot(scores_list: List[Tuple[str, UserScores]], series_index: int) 
     plt.gcf().subplots_adjust(bottom=0.25)
     plt.ylabel("Stacked scores")
     plt.xlabel("Username")
-    plt.xticks(list(range(len(scores_list))), [label for label, _ in scores_list], rotation=45)
+    plt.xticks(list(range(len(scores_list))), [label for label, _ in scores_list], rotation=45, ha="right")
     prev = [0] * len(scores_list)
     bars = []
     for i in range(1, series_index+1):
         bar_scores = [user_scores[i] for _, user_scores in scores_list]
-        bars.append(plt.bar(range(20), bar_scores, bottom=prev, width=0.55))
+        bars.append(plt.bar(range(20), bar_scores, bottom=prev, width=0.65))
         prev = [a + b for a, b in zip(prev, bar_scores)]
-    plt.legend((b[0] for b in bars), (f"Round #{r}" for r in range(1, len(bars)+1)), loc="upper left")
+    plt.legend((b[0] for b in reversed(bars)), (f"Round #{r}" for r in range(len(bars), 0, -1)), loc="upper left")
     plt.savefig(FIG_PATH, dpi=300)
     plt.close()
     return title
@@ -285,6 +286,8 @@ def save_bar_plot(scores_list: List[Tuple[str, UserScores]], series_index: int) 
 
 def upload_to_imgur() -> str:
     """Uploads the locally saved figure to imgur"""
+    if DEBUG_MODE:
+        return ""
     from imgurpython import ImgurClient
     client = ImgurClient(IMGUR_API['client_id'], IMGUR_API['client_secret'])
     url = client.upload_from_path(FIG_PATH)['link']
@@ -387,7 +390,7 @@ if __name__ == "__main__":
             try:
                 handle_each_series()
             except Exception as e:
-                print("Found error, skipping this loop. ")
+                print("Found error, skipping this loop.")
                 message_author_about_error(e)
             sleep_message = "Sleeping for " + str(SLEEP_INTERVAL_SECONDS / 60) + " minutes"
             print(sleep_message)
