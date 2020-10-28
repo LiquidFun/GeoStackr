@@ -40,10 +40,11 @@ print("=== Series found ===")
 for current_series_config in SERIES_CONFIGS:
     if 'regex' not in current_series_config:
         current_series_config['regex'] = DEFAULTS['regex']
-    if 'ignore' not in current_series_config:
-        current_series_config['ignore'] = set()
-    else:
-        current_series_config['ignore'] = set(current_series_config['ignore'].split())
+    for key in ['ignore', 'ignore_in_reddit_standings', 'ignore_in_sheets_standings']:
+        if key not in current_series_config:
+            current_series_config[key] = set()
+        else:
+            current_series_config[key] = set(current_series_config['ignore'].split())
     # print(f"{series_config=}") # Python 3.8 needed :(
     keyvals = ', '.join([f"{k}='{v}'" for k, v in current_series_config.items()])
     print(f"series_config={{{keyvals}}}")
@@ -190,13 +191,13 @@ def add_ordinal_suffix(i: int) -> str:
 def get_formatted_table(top):
     table = "| # | Username | Times Played | Average | **Sum** |\n"
     table += "|:-|:-|-:|-:|-:|\n"
-    last_score_and_index = (None, None)
+    previous_score_and_index = (None, None)
     for index, (user, scores) in enumerate(top, 1):
         # Remember score and index if multiple people have the same score, so that each of
         # them have the same position
-        if last_score_and_index[0] != scores.sum():
-            last_score_and_index = (scores.sum(), index)
-        index_fmt = add_ordinal_suffix(last_score_and_index[1])
+        if previous_score_and_index[0] != scores.sum():
+            previous_score_and_index = (scores.sum(), index)
+        index_fmt = add_ordinal_suffix(previous_score_and_index[1])
         table += f"| {index_fmt} | /u/{user} | {scores.len()} | {scores.avg()} | {scores.sum()} |\n"
     return table
 
@@ -205,23 +206,29 @@ def get_iso_date():
     return datetime.utcnow().replace(microsecond=0).isoformat().replace("T", " ")
 
 
-def get_formatted_body(top, urls=[]):
+def get_formatted_body(top, urls=[], prev_post=None, next_post=None):
     body = ""
     for url in urls:
         body += url + "\n\n"
         # body += f"[Score history of top {DEFAULTS['top_plot_count']} participants]({url})\n\n"
     body += "Stacked Scores (including current post):\n\n"
     body += get_formatted_table(top)
+    if prev_post or next_post:
+        prev_link = f"[◄ Previous post](https://www.reddit.com/r/geoguessr/comments/{prev_post})" if prev_post else ""
+        next_link = f"[Next post ►](https://www.reddit.com/r/geoguessr/comments/{next_post})" if next_post else ""
+        separator = " | " if prev_post and next_post else ""
+        body += f"\n{prev_link}{separator}{next_link}\n"
     body += f"\nUpdated: {get_iso_date()} UTC\n"
     body += get_info_line()
     return body
 
 
-def get_formatted_csv(top):
+def get_formatted_csv(top, series_config):
     indent = " " * 4
     text = f"{indent}Username, Times Played, Average, Sum\n"
     for index, (user, scores) in enumerate(top, 1):
-        text += f"{indent}{user}, {scores.len()}, {scores.avg()}, {scores.sum()}\n"
+        if user not in series_config['ignore_in_sheets_standings']:
+            text += f"{indent}{user}, {scores.len()}, {scores.avg()}, {scores.sum()}\n"
     return text
 
 
@@ -257,6 +264,7 @@ def save_line_plot(scores_list: List[Tuple[str, UserScores]], series_index: int)
     filter_lines_below_2x_values = [l for l in plt.gca().get_lines() if len(l.get_data()[0]) >= 2]
     # print(filter_lines_below_2x_values)
     plt.legend(loc="upper left")
+    # The labellines package tends to crash fairly often, therefore put it in a try catch block
     try:
         labelLines(filter_lines_below_2x_values, zorder=2.5)
     except:
@@ -333,22 +341,29 @@ def check_submissions_for_series(series_config):
     scores_dict: Dict[str, UserScores] = {}
     for series_index, submission in enumerate(relevant_submissions, 1):
         print(f"\n{submission.title}: ")
+        # Remember previous and next posts for body
+        prev_post = relevant_submissions[series_index-2] if 0 <= series_index-2 < len(relevant_submissions) else None
+        next_post = relevant_submissions[series_index] if 0 <= series_index < len(relevant_submissions) else None
+
         # Get scores
         merge_scores(scores_dict, submission, series_index, series_config)
 
         # Check if should post
         if scores_dict:
             top: List[Tuple[str, UserScores]] = get_top(scores_dict)
+            filtered_top: List[Tuple[str, UserScores]] = [
+                t for t in top if t[0] not in series_config['ignore_in_reddit_standings']
+            ][:DEFAULTS['top_count']]
             comment = get_already_posted_comment(submission)
 
             # Post new if not already there
             if comment is None:
                 print("\n\n\n=== POSTING NEW COMMENT ===")
-                csv = get_formatted_csv(top)
+                csv = get_formatted_csv(top, series_config)
                 print(csv)
                 subject = f'Statistics for "{submission.title}"'
-                urls = save_plots_and_get_urls(top, series_index)
-                body = get_formatted_body(top[:DEFAULTS['top_count']], urls=urls)
+                urls = save_plots_and_get_urls(filtered_top, series_index)
+                body = get_formatted_body(filtered_top, urls=urls, prev_post=prev_post, next_post=next_post)
                 print(body)
                 if not DEBUG_MODE:
                     redditor.message(subject, csv)
@@ -357,12 +372,12 @@ def check_submissions_for_series(series_config):
             # If comment exists then edit it instead
             else:
                 print("\n\n\n=== EDITING COMMENT ===")
-                if if_graph_needs_update(comment.body, top):
+                if if_graph_needs_update(comment.body, filtered_top):
                     print("=== Updating graph ===")
-                    urls = save_plots_and_get_urls(top, series_index)
+                    urls = save_plots_and_get_urls(filtered_top, series_index)
                 else:
                     urls = re.findall(r'\[.*]\(https://i\.imgur\.com/.*\.png\)', comment.body)
-                body = get_formatted_body(top[:DEFAULTS['top_count']], urls=urls)
+                body = get_formatted_body(filtered_top, urls=urls, prev_post=prev_post, next_post=next_post)
                 print(body)
                 if not DEBUG_MODE:
                     comment.edit(body)

@@ -39,8 +39,14 @@ defaults:
 ###                      the highest score should be taken, or the
 ###                      lowest instead
 ###     ignore (optional): usernames of users who will be ignored in the
-###                        scoreboard
-###     
+###                        while looking for scores
+###     ingore_in_reddit_standings (optional):
+###            usernames of users who will not be posted to the reddit
+###            scoreboard
+###     ingore_in_sheets_standings (optional):
+###            usernames of users who will not be posted to google sheets
+###
+###
 ### Example:
 series:
     - title: October Streak Stacker
