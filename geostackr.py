@@ -44,7 +44,7 @@ for current_series_config in SERIES_CONFIGS:
         if key not in current_series_config:
             current_series_config[key] = set()
         else:
-            current_series_config[key] = set(current_series_config['ignore'].split())
+            current_series_config[key] = set(current_series_config[key].split())
     # print(f"{series_config=}") # Python 3.8 needed :(
     keyvals = ', '.join([f"{k}='{v}'" for k, v in current_series_config.items()])
     print(f"series_config={{{keyvals}}}")
