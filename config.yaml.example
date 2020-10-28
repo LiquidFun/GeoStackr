@@ -38,6 +38,8 @@ defaults:
 ###     goal (optional): highest or lowest (default: highest), whether
 ###                      the highest score should be taken, or the
 ###                      lowest instead
+###     ignore (optional): usernames of users who will be ignored in the
+###                        scoreboard
 ###     
 ### Example:
 series:

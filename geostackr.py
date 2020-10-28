@@ -40,6 +40,10 @@ print("=== Series found ===")
 for current_series_config in SERIES_CONFIGS:
     if 'regex' not in current_series_config:
         current_series_config['regex'] = DEFAULTS['regex']
+    if 'ignore' not in current_series_config:
+        current_series_config['ignore'] = set()
+    else:
+        current_series_config['ignore'] = set(current_series_config['ignore'].split())
     # print(f"{series_config=}") # Python 3.8 needed :(
     keyvals = ', '.join([f"{k}='{v}'" for k, v in current_series_config.items()])
     print(f"series_config={{{keyvals}}}")
@@ -114,7 +118,7 @@ def get_bot_username() -> str:
     return config['reddit_api']['username']
 
 
-ignore_users = {get_bot_username(), "GeoGuessrTrackingBot"}
+IGNORE_USERS = {get_bot_username(), "GeoGuessrTrackingBot"}
 
 
 def get_info_line() -> str:
@@ -155,7 +159,7 @@ def get_score_list(submission, series_config: Dict[str, UserScores]) -> Dict[str
     score_list: Dict[str, Number] = {}
     for comment in submission.comments.list():
         if comment.author:
-            if comment.author.name not in ignore_users:
+            if comment.author.name not in IGNORE_USERS | series_config['ignore']:
                 number = get_goal_number_from_text(series_config, comment.body)
                 if number:
                     score_list[comment.author.name] = number
