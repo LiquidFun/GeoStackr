@@ -213,12 +213,12 @@ def get_formatted_body(top, urls=[], prev_post=None, next_post=None):
         # body += f"[Score history of top {DEFAULTS['top_plot_count']} participants]({url})\n\n"
     body += "Stacked Scores (including current post):\n\n"
     body += get_formatted_table(top)
+    body += f"\nUpdated: {get_iso_date()} UTC\n"
     if prev_post or next_post:
         prev_link = f"[◄ Previous post](https://www.reddit.com/r/geoguessr/comments/{prev_post})" if prev_post else ""
         next_link = f"[Next post ►](https://www.reddit.com/r/geoguessr/comments/{next_post})" if next_post else ""
         separator = " | " if prev_post and next_post else ""
         body += f"\n{prev_link}{separator}{next_link}\n"
-    body += f"\nUpdated: {get_iso_date()} UTC\n"
     body += get_info_line()
     return body
 
@@ -288,7 +288,7 @@ def save_bar_plot(scores_list: List[Tuple[str, UserScores]], series_index: int) 
     bars = []
     for i in range(1, series_index+1):
         bar_scores = [user_scores[i] for _, user_scores in scores_list]
-        bars.append(plt.bar(range(20), bar_scores, bottom=prev, width=0.65))
+        bars.append(plt.bar(range(len(bar_scores)), bar_scores, bottom=prev, width=0.65))
         prev = [a + b for a, b in zip(prev, bar_scores)]
     plt.legend((b[0] for b in reversed(bars)), (f"Round #{r}" for r in range(len(bars), 0, -1)), loc="upper left")
     plt.savefig(FIG_PATH, dpi=300)
