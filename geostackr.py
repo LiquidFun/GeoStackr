@@ -158,6 +158,7 @@ def get_goal_number_from_text(series_config, text) -> Optional[Number]:
 
 def get_score_list(submission, series_config: Dict[str, UserScores]) -> Dict[str, Number]:
     score_list: Dict[str, Number] = {}
+    submission.comments.replace_more(limit=0)
     for comment in submission.comments.list():
         if comment.author:
             if comment.author.name not in IGNORE_USERS | series_config['ignore']:
@@ -391,7 +392,7 @@ def handle_each_series():
 def message_author_about_error(exception):
     import traceback
     subject = f"{get_iso_date()} Error with GeoStackr Bot"
-    body = traceback.format_exc()
+    body = traceback.format_exc().replace("\n", "    \n")
     user = config['username_to_message_in_case_of_errors']
     print(f"Sending message to author: {user}")
     print(subject)
@@ -400,6 +401,7 @@ def message_author_about_error(exception):
 
 
 if __name__ == "__main__":
+    sleep_modifier = 1
     if DEBUG_MODE:
         print("Script running in DEBUG_MODE. No changes to reddit will be commited.")
         handle_each_series()
@@ -408,10 +410,15 @@ if __name__ == "__main__":
         while True:
             try:
                 handle_each_series()
+                sleep_modifier = 1
             except Exception as e:
+                sleep_modifier += 1
                 print("Found error, skipping this loop.")
-                message_author_about_error(e)
-            sleep_message = "Sleeping for " + str(SLEEP_INTERVAL_SECONDS / 60) + " minutes"
+                try:
+                    message_author_about_error(e)
+                except:
+                    pass
+            sleep_message = "Sleeping for " + str(SLEEP_INTERVAL_SECONDS / 60 * sleep_modifier) + " minutes"
             print(sleep_message)
             print("=" * len(sleep_message))
-            time.sleep(SLEEP_INTERVAL_SECONDS)
+            time.sleep(SLEEP_INTERVAL_SECONDS * sleep_modifier)
