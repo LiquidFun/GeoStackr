@@ -143,6 +143,7 @@ def get_goal_function(series_config: Dict[str, Any]) -> Callable[[Number, Number
 
 def get_goal_number_from_text(series_config, text) -> Optional[Number]:
     goal_function = get_goal_function(series_config)
+    text = text.replace("&#x200B;", "")
     # Use regex in series config
     numbers = [int(a) for a in re.findall(series_config['regex'], text)]
     # Min and max may not both be defined, so handle separately
@@ -159,7 +160,7 @@ def get_goal_number_from_text(series_config, text) -> Optional[Number]:
 def get_score_list(submission, series_config: Dict[str, UserScores]) -> Dict[str, Number]:
     score_list: Dict[str, Number] = {}
     submission.comments.replace_more(limit=0)
-    for comment in submission.comments.list():
+    for comment in submission.comments:
         if comment.author:
             if comment.author.name not in IGNORE_USERS | series_config['ignore']:
                 number = get_goal_number_from_text(series_config, comment.body)
