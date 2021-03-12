@@ -1,0 +1,31 @@
+### The series (plural) you want to be tracked
+### Each series entry should have a - followed by these parameters:
+###     title: a string guaranteed to be in every post of the series
+###     author: the author of the series (has to be the same every post)
+###     regex (optional): regex to use in the series (look up online what
+###                       a regex is, or look at the examples)
+###     min (optional): will ignore values below this one
+###     max (optional): will ignore values above this one
+###     goal (optional): highest or lowest (default: highest), whether
+###                      the highest score should be taken, or the
+###                      lowest instead
+###     ignore (optional): usernames of users who will be ignored in the
+###                        while looking for scores
+###     ingore_in_reddit_standings (optional):
+###            usernames of users who will not be posted to the reddit
+###            scoreboard
+###     ingore_in_sheets_standings (optional):
+###            usernames of users who will not be posted to google sheets
+###
+###
+### Example:
+series:
+    - title: October Streak Stacker
+      author: olsnes
+      regex: \d{1,3}00 # will match 100, 200 ... 9800, 9900
+    - title: November Streak Stacker
+      author: olsnes
+      regex: \d{1,5} # will match # 1, 2 ... 99998, 99999
+      max: 25000 # will then limit the score to 25000 (what the regex can't do)
+      min: 0
+      goal: highest # will maximize the score, so that it matches the regex, but stays within min/max

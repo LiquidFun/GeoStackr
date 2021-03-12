@@ -13,9 +13,9 @@ import yaml
 
 # Change these if you want to run it for a different series
 CONFIG = "config.yaml"
+SERIES = "series.yaml"
 FIG_PATH = "last_fig.png"
 SLEEP_INTERVAL_SECONDS = 300
-
 
 # Load config
 try:
@@ -24,8 +24,15 @@ except IOError:
     print(f"Could not load {CONFIG}. Make sure to rename it from {CONFIG}.example to {CONFIG}!")
     sys.exit(1)
 
+# Load series
+try:
+    series = yaml.load(open(SERIES), Loader=yaml.FullLoader)
+except IOError:
+    print(f"Could not load {SERIES}. Make sure to rename it from {SERIES}.example to {SERIES}!")
+    sys.exit(1)
+
 # Check if all keys required to be in config are there
-for required_in_config in ["defaults", "reddit_api", "series", "debug"]:
+for required_in_config in ["defaults", "reddit_api", "debug", "subreddit"]:
     if required_in_config not in config:
         print(f"'{required_in_config}' not defined in {CONFIG}")
         sys.exit(1)
@@ -34,22 +41,28 @@ for required_in_config in ["defaults", "reddit_api", "series", "debug"]:
 DEBUG_MODE = config['debug']
 DEFAULTS = config['defaults']
 REDDIT_API = config['reddit_api']
-SERIES_CONFIGS = config['series']
+SUBREDDIT = config['subreddit']
 
-print("=== Series found ===")
-for current_series_config in SERIES_CONFIGS:
-    if 'regex' not in current_series_config:
-        current_series_config['regex'] = DEFAULTS['regex']
-    for key in ['ignore', 'ignore_in_reddit_standings', 'ignore_in_sheets_standings']:
-        if key not in current_series_config:
-            current_series_config[key] = set()
-        else:
-            current_series_config[key] = set(current_series_config[key].split())
-    # print(f"{series_config=}") # Python 3.8 needed :(
-    keyvals = ', '.join([f"{k}='{v}'" for k, v in current_series_config.items()])
-    print(f"series_config={{{keyvals}}}")
-print()
+# return empty list if no series present
+SERIES_CONFIGS = series['series']
 
+
+def validate_existing_series():
+    # Check existing series
+    print("=== Series found ===")
+    for current_series_config in SERIES_CONFIGS:
+        if 'regex' not in current_series_config:
+            current_series_config['regex'] = DEFAULTS['regex']
+        for key in ['ignore', 'ignore_in_reddit_standings', 'ignore_in_sheets_standings']:
+            if key not in current_series_config:
+                current_series_config[key] = set()
+            else:
+                current_series_config[key] = set(current_series_config[key].split())
+        # print(f"{series_config=}") # Python 3.8 needed :(
+        keyvals = ', '.join([f"{k}='{v}'" for k, v in current_series_config.items()])
+        print(f"series_config={{{keyvals}}}")
+    print()
+    
 try:
     IMGUR_API = config['imgur_api']
 except KeyError:
@@ -133,6 +146,8 @@ def get_info_line() -> str:
 [3]: https://github.com/LiquidFun/GeoStackr
 """
 
+def get_currently_tracked_series():
+    return [series['title'] for series in SERIES_CONFIGS] 
 
 def get_goal_function(series_config: Dict[str, Any]) -> Callable[[Number, Number], Number]:
     return {
@@ -308,11 +323,13 @@ def upload_to_imgur() -> str:
     print(f"Uploaded image to {url}")
     return url
 
-
 def format_title(title: str):
     """Formats title by making it lowercase and removing all spaces"""
     return title.lower().replace(" ", "").strip()
 
+def format_title_to_tracking_title(title: str):
+    """Formats title and strips any special chars"""
+    return re.sub("[\[\]\/\\$%&@#\d+]","", format_title(title))
 
 def if_graph_needs_update(body: str, top: List[Tuple[str, UserScores]]) -> bool:
     """Returns True if at least a single score needs an update"""
@@ -329,6 +346,52 @@ def save_plots_and_get_urls(top_list: List[Tuple[str, UserScores]], series_index
             formatted_urls.append(f"[{plot_function(top_list, series_index)}]({upload_to_imgur()})")
     return formatted_urls
 
+
+def add_new_series_to_yaml(name: str, author: str, regex: str):
+    series_dict = {
+                     "title" : name,
+                     "author" : author,
+                     "regex" : regex
+                  }
+
+    with open('series.yaml', 'r') as yamlfile:
+        current = yaml.safe_load(yamlfile)
+        current['series'].append(series_dict)
+
+    if current:
+        with open('series.yaml', 'w') as yamlfile:
+            yaml.safe_dump(current, yamlfile)
+            print(f"series {name} by {author} has been added")
+
+def check_for_new_series():
+    print('checking for new series to be tracked...')
+    reddit = get_reddit_instance()
+    subreddit = reddit.subreddit(SUBREDDIT['name'])
+    submissionList = subreddit.new(limit = 100)
+
+    for submission in submissionList:
+        series_name = format_title_to_tracking_title(submission.title)
+        # check if series is already tracked
+        if series_name in get_currently_tracked_series():
+            print(f"series {series_name} already tracked, skipping...") 
+        else:
+            for top_level_comment in submission.comments:
+                try:
+                    if top_level_comment.author.name == submission.author.name:
+                        if '!trackme' in top_level_comment.body.lower():
+                            print(f"found tracking request for submission {submission.id} - {submission.title}")
+                            series_author = submission.author.name
+                            series_format = DEFAULTS['regex'] #TODO
+                            add_new_series_to_yaml(series_name, series_author, series_format)
+                            
+                            # Reply to tracking request if not in debug mode
+                            if not DEBUG_MODE:
+                                reply_to_tracking_comment(top_level_comment)
+                except AttributeError:
+                    pass
+
+def reply_to_tracking_comment(comment: str):
+    comment.reply("""I will be tracking this series from now on """ + get_info_line())
 
 def check_submissions_for_series(series_config):
     print(str(datetime.now()) + ": Running GeoStackr.")
@@ -386,6 +449,13 @@ def check_submissions_for_series(series_config):
 
 
 def handle_each_series():
+    # Validate existing series
+    validate_existing_series()
+
+    # Check for new series to be tracked
+    check_for_new_series()
+    
+    # Iterate through all tracked challenges to see if there are any updates
     for series_config in SERIES_CONFIGS:
         check_submissions_for_series(series_config)
 
