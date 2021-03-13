@@ -180,7 +180,9 @@ def get_score_list(submission, series_config: Dict[str, UserScores]) -> Dict[str
             if comment.author.name not in IGNORE_USERS | series_config['ignore']:
                 number = get_goal_number_from_text(series_config, comment.body)
                 if number:
-                    score_list[comment.author.name] = number
+                    # Check if there are more top_level_comments from the same user which contains numbers and take the highest
+                    goal_function = get_goal_function(series_config)
+                    score_list[comment.author.name] = goal_function(number, score_list.get(comment.author.name, number))
     return score_list
 
 
