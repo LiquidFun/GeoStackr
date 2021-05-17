@@ -160,7 +160,7 @@ def get_goal_number_from_text(series_config, text) -> Optional[Number]:
     goal_function = get_goal_function(series_config)
     text = text.replace("&#x200B;", "")
     # Use regex in series config
-    numbers = [int(a) for a in re.findall(series_config['regex'], text)]
+    numbers = [int(re.sub("[^0-9]", "", a)) for a in re.findall(series_config['regex'], text)]
     # Min and max may not both be defined, so handle separately
     if 'min' in series_config:
         numbers = filter(lambda x: series_config['min'] <= x, numbers)
