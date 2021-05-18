@@ -159,8 +159,10 @@ def get_goal_function(series_config: Dict[str, Any]) -> Callable[[Number, Number
 def get_goal_number_from_text(series_config, text) -> Optional[Number]:
     goal_function = get_goal_function(series_config)
     text = text.replace("&#x200B;", "")
-    # Use regex in series config
-    numbers = [int(re.sub("[^0-9]", "", a)) for a in re.findall(series_config['regex'], text)]
+    # Use regex in series config. Surround pattern with a group, and afterwards an empty group,
+    # so that findall always returns a list of tuples where the first entry matches the entire
+    # regex.
+    numbers = [int(re.sub("[^0-9]", "", a[0])) for a in re.findall(f"({series_config['regex']})()", text)]
     # Min and max may not both be defined, so handle separately
     if 'min' in series_config:
         numbers = filter(lambda x: series_config['min'] <= x, numbers)
@@ -456,7 +458,7 @@ def handle_each_series():
 
     # Check for new series to be tracked
     check_for_new_series()
-    
+
     # Iterate through all tracked challenges to see if there are any updates
     for series_config in SERIES_CONFIGS:
         check_submissions_for_series(series_config)
@@ -465,7 +467,7 @@ def handle_each_series():
 def message_author_about_error(exception):
     import traceback
     subject = f"{get_iso_date()} Error with GeoStackr Bot"
-    body = traceback.format_exc().replace("\n", "    \n")
+    body = f"```py\n{traceback.format_exc()}\n```"
     user = config['username_to_message_in_case_of_errors']
     print(f"Sending message to author: {user}")
     print(subject)
