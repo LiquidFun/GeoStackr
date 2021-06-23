@@ -372,9 +372,9 @@ def check_for_new_series():
     print('checking for new series to be tracked...')
     reddit = get_reddit_instance()
     subreddit = reddit.subreddit(SUBREDDIT['name'])
-    submissionList = subreddit.new(limit = 100)
+    submission_list = subreddit.new(limit = 100)
 
-    for submission in submissionList:
+    for submission in submission_list:
         series_name = format_title_to_tracking_title(submission.title)
         # check if series is already tracked
         if series_name in get_currently_tracked_series():

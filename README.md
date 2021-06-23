@@ -11,7 +11,7 @@ Furthermore generates fancy graphs of the progression of the top 5 participants 
 
 # Running it
 
-## Copy the `config.yaml.example` and rename it to `config.yaml`:
+## Copy the `config.example.yaml` and rename it to `config.yaml`:
 
 * Add the reddit api keys, username and password of the bot account.
 * Add the series name and author in the series dict

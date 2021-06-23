@@ -12,6 +12,8 @@ reddit_api:
     password: $your_reddit_bot_password
 
 subreddit:
+    ### Example (do not write "/r/")
+    ### name: geochallenges
     name: $subreddit_to_monitor
 
 ### Used to post pretty graphs for the history of the series
