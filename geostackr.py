@@ -38,33 +38,34 @@ for required_in_config in ["defaults", "reddit_api", "debug", "subreddit"]:
         sys.exit(1)
 
 # In debug mode nothing committing will be done (i.e. no posts on reddit). Only prints to stdout
-DEBUG_MODE = config['debug']
-DEFAULTS = config['defaults']
-REDDIT_API = config['reddit_api']
-SUBREDDIT = config['subreddit']
+DEBUG_MODE = config["debug"]
+DEFAULTS = config["defaults"]
+REDDIT_API = config["reddit_api"]
+SUBREDDIT = config["subreddit"]
 
 # return empty list if no series present
-SERIES_CONFIGS = series['series']
+SERIES_CONFIGS = series["series"]
 
 
 def validate_existing_series():
     # Check existing series
     print("=== Series found ===")
     for current_series_config in SERIES_CONFIGS:
-        if 'regex' not in current_series_config:
-            current_series_config['regex'] = DEFAULTS['regex']
-        for key in ['ignore', 'ignore_in_reddit_standings', 'ignore_in_sheets_standings']:
+        if "regex" not in current_series_config:
+            current_series_config["regex"] = DEFAULTS["regex"]
+        for key in ["ignore", "ignore_in_reddit_standings", "ignore_in_sheets_standings"]:
             if key not in current_series_config:
                 current_series_config[key] = set()
             else:
                 current_series_config[key] = set(current_series_config[key].split())
         # print(f"{series_config=}") # Python 3.8 needed :(
-        keyvals = ', '.join([f"{k}='{v}'" for k, v in current_series_config.items()])
+        keyvals = ", ".join([f"{k}='{v}'" for k, v in current_series_config.items()])
         print(f"series_config={{{keyvals}}}")
     print()
-    
+
+
 try:
-    IMGUR_API = config['imgur_api']
+    IMGUR_API = config["imgur_api"]
 except KeyError:
     print(f"imgur_api not defined in {CONFIG}, won't post graphs!")
     IMGUR_API = None
@@ -88,7 +89,7 @@ class UserScores:
         return len(self.scores)
 
     def avg(self) -> int:
-        return self.sum()//self.len()
+        return self.sum() // self.len()
 
     def last(self) -> int:
         return self.scores[max(self.scores)]
@@ -99,37 +100,36 @@ class UserScores:
     def _xy(self):
         xy = {"x": [], "y": []}
         prev_y = 0
-        for i in range(1, max(self.scores)+1):
-            xy['x'].append(i)
+        for i in range(1, max(self.scores) + 1):
+            xy["x"].append(i)
             if i in self.scores:
                 prev_y = prev_y + self.scores[i]
-            xy['y'].append(prev_y)
+            xy["y"].append(prev_y)
         return xy
 
     def x(self):
         """For using in pyplot"""
-        return self._xy()['x']
+        return self._xy()["x"]
 
     def y(self):
         """For using in pyplot"""
-        return self._xy()['y']
+        return self._xy()["y"]
 
 
 def get_reddit_instance():
     # Get an authenticated reddit instance from praw by using the config
     return praw.Reddit(
-        client_id=REDDIT_API['client_id'],
-        client_secret=REDDIT_API['client_secret'],
-        username=REDDIT_API['username'],
-        password=REDDIT_API['password'],
-        user_agent='linux:geostackr:0.1 (by /u/LiquidProgrammer)',
+        client_id=REDDIT_API["client_id"],
+        client_secret=REDDIT_API["client_secret"],
+        username=REDDIT_API["username"],
+        password=REDDIT_API["password"],
+        user_agent="linux:geostackr:0.1 (by /u/LiquidProgrammer)",
     )
 
 
 def get_bot_username() -> str:
-    """Get the username of the bot which is currently logged in
-    """
-    return config['reddit_api']['username']
+    """Get the username of the bot which is currently logged in"""
+    return config["reddit_api"]["username"]
 
 
 IGNORE_USERS = {get_bot_username(), "GeoGuessrTrackingBot"}
@@ -146,14 +146,16 @@ def get_info_line() -> str:
 [3]: https://github.com/LiquidFun/GeoStackr
 """
 
+
 def get_currently_tracked_series():
-    return [series['title'] for series in SERIES_CONFIGS] 
+    return [series["title"] for series in SERIES_CONFIGS]
+
 
 def get_goal_function(series_config: Dict[str, Any]) -> Callable[[Number, Number], Number]:
     return {
         "highest": max,
         "lowest": min,
-    }[series_config.get('goal', 'highest')]
+    }[series_config.get("goal", "highest")]
 
 
 def get_goal_number_from_text(series_config, text) -> Optional[Number]:
@@ -164,10 +166,10 @@ def get_goal_number_from_text(series_config, text) -> Optional[Number]:
     # regex.
     numbers = [int(re.sub("[^0-9]", "", a[0])) for a in re.findall(f"({series_config['regex']})()", text)]
     # Min and max may not both be defined, so handle separately
-    if 'min' in series_config:
-        numbers = filter(lambda x: series_config['min'] <= x, numbers)
-    if 'max' in series_config:
-        numbers = filter(lambda x: x <= series_config['max'], numbers)
+    if "min" in series_config:
+        numbers = filter(lambda x: series_config["min"] <= x, numbers)
+    if "max" in series_config:
+        numbers = filter(lambda x: x <= series_config["max"], numbers)
     # May return None, needs to be handled
     if numbers:
         return goal_function(numbers)
@@ -179,7 +181,7 @@ def get_score_list(submission, series_config: Dict[str, UserScores]) -> Dict[str
     submission.comments.replace_more(limit=0)
     for comment in submission.comments:
         if comment.author:
-            if comment.author.name not in IGNORE_USERS | series_config['ignore']:
+            if comment.author.name not in IGNORE_USERS | series_config["ignore"]:
                 number = get_goal_number_from_text(series_config, comment.body)
                 if number:
                     # Check if there are more top_level_comments from the same user which contains numbers and take the highest
@@ -206,7 +208,7 @@ def get_top(scores_dict: Dict[str, UserScores]) -> List[Tuple[str, UserScores]]:
 
 
 def add_ordinal_suffix(i: int) -> str:
-    return str(i) + {1: 'st', 2: 'nd', 3: 'rd'}.get(i if i%100 < 20 else i%10, 'th')
+    return str(i) + {1: "st", 2: "nd", 3: "rd"}.get(i if i % 100 < 20 else i % 10, "th")
 
 
 def get_formatted_table(top):
@@ -249,7 +251,7 @@ def get_formatted_csv(top, series_config):
     indent = " " * 4
     text = f"{indent}Username, Times Played, Average, Sum\n"
     for index, (user, scores) in enumerate(top, 1):
-        if user not in series_config['ignore_in_sheets_standings']:
+        if user not in series_config["ignore_in_sheets_standings"]:
             text += f"{indent}{user}, {scores.len()}, {scores.avg()}, {scores.sum()}\n"
     return text
 
@@ -265,22 +267,27 @@ def merge_scores(scores_dict, submission, series_index: int, series_config):
 def save_line_plot(scores_list: List[Tuple[str, UserScores]], series_index: int) -> str:
     from matplotlib import pyplot as plt
     from labellines import labelLines
+
     # Doesn't make much sense to plot anything if there is only 1 post
     if series_index <= 2:
         return ""
     title = f"Score History for Current Top {DEFAULTS['top_plot_count']} Participants"
-    plt.rcParams.update({'font.size': 6})
+    plt.rcParams.update({"font.size": 6})
     plt.title(title)
     plt.ylabel("Stacked scores")
     plt.xlabel("Post number")
-    plt.xticks(list(range(1, series_index+1)))
-    plt.margins(x=.15)
-    for user, scores in scores_list[:DEFAULTS['top_plot_count']]:
+    plt.xticks(list(range(1, series_index + 1)))
+    plt.margins(x=0.15)
+    for user, scores in scores_list[: DEFAULTS["top_plot_count"]]:
         prev_line = plt.plot(scores.x(), scores.y(), ".-", label=user, linewidth=1.5)
         x_offset = 0.01 * series_index
-        plt.text(scores.x()[-1]+x_offset, scores.y()[-1],
-                 scores.sum(), color=prev_line[0].get_color(),
-                 verticalalignment="center")
+        plt.text(
+            scores.x()[-1] + x_offset,
+            scores.y()[-1],
+            scores.sum(),
+            color=prev_line[0].get_color(),
+            verticalalignment="center",
+        )
     # for line in plt.gca().get_lines():
     #     print(line, line.get_data())
     filter_lines_below_2x_values = [l for l in plt.gca().get_lines() if len(l.get_data()[0]) >= 2]
@@ -298,9 +305,10 @@ def save_line_plot(scores_list: List[Tuple[str, UserScores]], series_index: int)
 
 def save_bar_plot(scores_list: List[Tuple[str, UserScores]], series_index: int) -> str:
     from matplotlib import pyplot as plt
-    scores_list = list(reversed(scores_list[:DEFAULTS['top_count']]))
+
+    scores_list = list(reversed(scores_list[: DEFAULTS["top_count"]]))
     title = f"Bar Plot for Current Top {len(scores_list)} Participants' Scores"
-    plt.rcParams.update({'font.size': 6})
+    plt.rcParams.update({"font.size": 6})
     plt.title(title)
     plt.gcf().subplots_adjust(bottom=0.25)
     plt.ylabel("Stacked scores")
@@ -308,7 +316,7 @@ def save_bar_plot(scores_list: List[Tuple[str, UserScores]], series_index: int) 
     plt.xticks(list(range(len(scores_list))), [label for label, _ in scores_list], rotation=45, ha="right")
     prev = [0] * len(scores_list)
     bars = []
-    for i in range(1, series_index+1):
+    for i in range(1, series_index + 1):
         bar_scores = [user_scores[i] for _, user_scores in scores_list]
         bars.append(plt.bar(range(len(bar_scores)), bar_scores, bottom=prev, width=0.65))
         prev = [a + b for a, b in zip(prev, bar_scores)]
@@ -323,23 +331,27 @@ def upload_to_imgur() -> str:
     if DEBUG_MODE:
         return ""
     from imgurpython import ImgurClient
-    client = ImgurClient(IMGUR_API['client_id'], IMGUR_API['client_secret'])
-    url = client.upload_from_path(FIG_PATH)['link']
+
+    client = ImgurClient(IMGUR_API["client_id"], IMGUR_API["client_secret"])
+    url = client.upload_from_path(FIG_PATH)["link"]
     print(f"Uploaded image to {url}")
     return url
+
 
 def format_title(title: str):
     """Formats title by making it lowercase and removing all spaces"""
     return title.lower().replace(" ", "").strip()
 
+
 def format_title_to_tracking_title(title: str):
     """Formats title and strips any special chars"""
-    return re.sub("[\[\]\/\\$%&@#\d+]","", format_title(title))
+    return re.sub("[\[\]\/\\$%&@#\d+]", "", format_title(title))
+
 
 def if_graph_needs_update(body: str, top: List[Tuple[str, UserScores]]) -> bool:
     """Returns True if at least a single score needs an update"""
     pattern = re.compile(r"\d+ \|$", re.MULTILINE)
-    matches = re.findall(pattern, body)[:DEFAULTS['top_count']]
+    matches = re.findall(pattern, body)[: DEFAULTS["top_count"]]
     return any([s[1].sum() != int(c.replace("|", "")) for s, c in zip(top, matches)])
 
 
@@ -353,66 +365,67 @@ def save_plots_and_get_urls(top_list: List[Tuple[str, UserScores]], series_index
 
 
 def add_new_series_to_yaml(name: str, author: str, regex: str):
-    series_dict = {
-                     "title" : name,
-                     "author" : author,
-                     "regex" : regex
-                  }
+    series_dict = {"title": name, "author": author, "regex": regex}
 
-    with open('series.yaml', 'r') as yamlfile:
+    with open("series.yaml", "r") as yamlfile:
         current = yaml.safe_load(yamlfile)
-        current['series'].append(series_dict)
+        current["series"].append(series_dict)
 
     if current:
-        with open('series.yaml', 'w') as yamlfile:
+        with open("series.yaml", "w") as yamlfile:
             yaml.safe_dump(current, yamlfile)
             print(f"series {name} by {author} has been added")
 
+
 def check_for_new_series():
-    print('checking for new series to be tracked...')
+    print("checking for new series to be tracked...")
     reddit = get_reddit_instance()
-    subreddit = reddit.subreddit(SUBREDDIT['name'])
-    submission_list = subreddit.new(limit = 100)
+    subreddit = reddit.subreddit(SUBREDDIT["name"])
+    submission_list = subreddit.new(limit=100)
 
     for submission in submission_list:
         series_name = format_title_to_tracking_title(submission.title)
         # check if series is already tracked
         if series_name in get_currently_tracked_series():
-            print(f"series {series_name} already tracked, skipping...") 
+            print(f"series {series_name} already tracked, skipping...")
         else:
             for top_level_comment in submission.comments:
                 try:
                     if top_level_comment.author.name == submission.author.name:
-                        if '!trackme' in top_level_comment.body.lower():
+                        if "!trackme" in top_level_comment.body.lower():
                             print(f"found tracking request for submission {submission.id} - {submission.title}")
                             series_author = submission.author.name
-                            series_format = DEFAULTS['regex'] #TODO
+                            series_format = DEFAULTS["regex"]  # TODO
                             add_new_series_to_yaml(series_name, series_author, series_format)
-                            
+
                             # Reply to tracking request if not in debug mode
                             if not DEBUG_MODE:
                                 reply_to_tracking_comment(top_level_comment)
                 except AttributeError:
                     pass
 
+
 def reply_to_tracking_comment(comment: str):
     comment.reply("""I will be tracking this series from now on """ + get_info_line())
+
 
 def check_submissions_for_series(series_config):
     print(str(datetime.now()) + ": Running GeoStackr.")
 
     reddit = get_reddit_instance()
-    redditor = reddit.redditor(series_config['author'])
+    redditor = reddit.redditor(series_config["author"])
     relevant_submissions = []
     for submission in redditor.submissions.new():
-        if format_title(series_config['title']) in format_title(submission.title):
+        if format_title(series_config["title"]) in format_title(submission.title):
             relevant_submissions.append(submission)
     relevant_submissions.sort(key=lambda s: s.created_utc)
     scores_dict: Dict[str, UserScores] = {}
     for series_index, submission in enumerate(relevant_submissions, 1):
         print(f"\n{submission.title}: ")
         # Remember previous and next posts for body
-        prev_post = relevant_submissions[series_index-2] if 0 <= series_index-2 < len(relevant_submissions) else None
+        prev_post = (
+            relevant_submissions[series_index - 2] if 0 <= series_index - 2 < len(relevant_submissions) else None
+        )
         next_post = relevant_submissions[series_index] if 0 <= series_index < len(relevant_submissions) else None
 
         # Get scores
@@ -422,8 +435,8 @@ def check_submissions_for_series(series_config):
         if scores_dict:
             top: List[Tuple[str, UserScores]] = get_top(scores_dict)
             filtered_top: List[Tuple[str, UserScores]] = [
-                t for t in top if t[0] not in series_config['ignore_in_reddit_standings']
-            ][:DEFAULTS['top_count']]
+                t for t in top if t[0] not in series_config["ignore_in_reddit_standings"]
+            ][: DEFAULTS["top_count"]]
             comment = get_already_posted_comment(submission)
 
             # Post new if not already there
@@ -446,7 +459,7 @@ def check_submissions_for_series(series_config):
                     print("=== Updating graph ===")
                     urls = save_plots_and_get_urls(filtered_top, series_index)
                 else:
-                    urls = re.findall(r'\[.*]\(https://i\.imgur\.com/.*\.png\)', comment.body)
+                    urls = re.findall(r"\[.*]\(https://i\.imgur\.com/.*\.png\)", comment.body)
                 body = get_formatted_body(filtered_top, urls=urls, prev_post=prev_post, next_post=next_post)
                 print(body)
                 if not DEBUG_MODE:
@@ -467,9 +480,10 @@ def handle_each_series():
 
 def message_author_about_error(exception):
     import traceback
+
     subject = f"{get_iso_date()} Error with GeoStackr Bot"
     body = f"```py\n{traceback.format_exc()}\n```"
-    user = config['username_to_message_in_case_of_errors']
+    user = config["username_to_message_in_case_of_errors"]
     print(f"Sending message to author: {user}")
     print(subject)
     print(body, "\n")
