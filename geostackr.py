@@ -6,10 +6,10 @@ import time
 from numbers import Number
 from typing import Dict, List, Optional, Callable, Any, Tuple
 from datetime import datetime
+from functools import partial
 
 import praw
 import yaml
-
 
 # Change these if you want to run it for a different series
 CONFIG = "config.yaml"
@@ -73,7 +73,7 @@ except KeyError:
 
 class UserScores:
     def __init__(self, author: str):
-        self.scores = {}
+        self.scores: Dict[int, int] = {}
         self.author = author
 
     def __getitem__(self, item: int) -> int:
@@ -116,6 +116,60 @@ class UserScores:
         return self._xy()["y"]
 
 
+# noinspection PyPep8Naming
+class ScoreFunction:
+
+    @staticmethod
+    def _get_score_functions() -> Dict[str, Callable]:
+        def maxX(n_outputs: int, input_scores: List[int]) -> List[int]:
+            return sorted(input_scores)[-n_outputs:]
+
+        def minX(n_outputs: int, input_scores: List[int]) -> List[int]:
+            return sorted(input_scores)[:n_outputs]
+
+        def padXwithX(n_outputs: int, pad_with: int, input_scores: List[int]) -> List[int]:
+            return [pad_with] * (n_outputs - len(input_scores)) + input_scores
+
+        def sum_(input_scores: List[int]) -> List[int]:
+            return [sum(input_scores)]
+
+        def average(input_scores: List[int]) -> List[int]:
+            return [sum(input_scores) // len(input_scores)]
+
+        def newestX(n_outputs: int, input_scores: List[int]) -> List[int]:
+            return input_scores[-n_outputs:]
+
+        def oldestX(n_outputs: int, input_scores: List[int]) -> List[int]:
+            return input_scores[:n_outputs]
+
+        functions: List[Callable] = [maxX, minX, padXwithX, sum_, average, newestX, oldestX]
+        return {func.__name__.replace("_", ""): func for func in functions}
+
+    @staticmethod
+    def _get_regex_pattern(score_functions: Dict[str, Callable]):
+        function_names_as_regexes = [name.replace("X", r"(\d+)") for name in score_functions]
+        return re.compile(f"({'|'.join(function_names_as_regexes)})")
+
+    score_functions: Dict[str, Callable] = _get_score_functions()
+    regex_pattern = _get_regex_pattern(score_functions)
+
+    def __init__(self, score_function_str: str):
+        # "max4 -> sum" becomes [('max4', '4', '', '', '', '', ''), ('sum', '', '', '', '', '', '')]
+        parsed = re.findall(ScoreFunction.regex_pattern, score_function_str)
+        self.functions: List[Callable] = []
+        for function_name, *params in parsed:
+            function_name = re.sub(r"\d+", "X", function_name)
+            params = map(int, filter(lambda x: x == '', params))
+            self.functions.append(partial(self.score_functions[function_name], *params))
+        self.functions.append(sum)
+
+    def __call__(self, user_scores: UserScores) -> int:
+        scores = user_scores.scores.values()
+        for function in self.functions:
+            scores = function(scores)
+        return scores
+
+
 def get_reddit_instance():
     # Get an authenticated reddit instance from praw by using the config
     return praw.Reddit(
@@ -151,7 +205,7 @@ def get_currently_tracked_series():
     return [series["title"] for series in SERIES_CONFIGS]
 
 
-def get_goal_function(series_config: Dict[str, Any]) -> Callable[[Number, Number], Number]:
+def get_goal_function(series_config: Dict[str, Any]) -> Callable:
     return {
         "highest": max,
         "lowest": min,
@@ -164,12 +218,12 @@ def get_goal_number_from_text(series_config, text) -> Optional[Number]:
     # Use regex in series config. Surround pattern with a group, and afterwards an empty group,
     # so that findall always returns a list of tuples where the first entry matches the entire
     # regex.
-    numbers = [int(re.sub("[^0-9]", "", a[0])) for a in re.findall(f"({series_config['regex']})()", text)]
+    numbers = [int(re.sub(r"[^0-9]", "", a[0])) for a in re.findall(f"({series_config['regex']})()", text)]
     # Min and max may not both be defined, so handle separately
     if "min" in series_config:
-        numbers = filter(lambda x: series_config["min"] <= x, numbers)
+        numbers = list(filter(lambda x: series_config["min"] <= x, numbers))
     if "max" in series_config:
-        numbers = filter(lambda x: x <= series_config["max"], numbers)
+        numbers = list(filter(lambda x: x <= series_config["max"], numbers))
     # May return None, needs to be handled
     if numbers:
         return goal_function(numbers)
@@ -184,7 +238,8 @@ def get_score_list(submission, series_config: Dict[str, UserScores]) -> Dict[str
             if comment.author.name not in IGNORE_USERS | series_config["ignore"]:
                 number = get_goal_number_from_text(series_config, comment.body)
                 if number:
-                    # Check if there are more top_level_comments from the same user which contains numbers and take the highest
+                    # Check if there are more top_level_comments from the same
+                    # user which contains numbers and take the highest
                     goal_function = get_goal_function(series_config)
                     score_list[comment.author.name] = goal_function(number, score_list.get(comment.author.name, number))
     return score_list
@@ -405,7 +460,7 @@ def check_for_new_series():
                     pass
 
 
-def reply_to_tracking_comment(comment: str):
+def reply_to_tracking_comment(comment):
     comment.reply("""I will be tracking this series from now on """ + get_info_line())
 
 
@@ -433,10 +488,11 @@ def check_submissions_for_series(series_config):
 
         # Check if should post
         if scores_dict:
-            top: List[Tuple[str, UserScores]] = get_top(scores_dict)
+            # top: List[Tuple[str, UserScores]] = get_top(scores_dict)
             filtered_top: List[Tuple[str, UserScores]] = [
-                t for t in top if t[0] not in series_config["ignore_in_reddit_standings"]
-            ][: DEFAULTS["top_count"]]
+                                                             t for t in top if
+                                                             t[0] not in series_config["ignore_in_reddit_standings"]
+                                                         ][: DEFAULTS["top_count"]]
             comment = get_already_posted_comment(submission)
 
             # Post new if not already there
