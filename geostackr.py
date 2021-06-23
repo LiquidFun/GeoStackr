@@ -236,8 +236,9 @@ def get_formatted_body(top, urls=[], prev_post=None, next_post=None):
     body += get_formatted_table(top)
     body += f"\nUpdated: {get_iso_date()} UTC\n"
     if prev_post or next_post:
-        prev_link = f"[◄ Previous post](https://www.reddit.com/r/geoguessr/comments/{prev_post})" if prev_post else ""
-        next_link = f"[Next post ►](https://www.reddit.com/r/geoguessr/comments/{next_post})" if next_post else ""
+        link_prefix = f"https://www.reddit.com/r/{SUBREDDIT['name']}/comments/"
+        prev_link = f"[◄ Previous post]({link_prefix}{prev_post})" if prev_post else ""
+        next_link = f"[Next post ►]({link_prefix}{next_post})" if next_post else ""
         separator = " | " if prev_post and next_post else ""
         body += f"\n{prev_link}{separator}{next_link}\n"
     body += get_info_line()
