@@ -26,6 +26,9 @@ subreddit:
 # if left out then no message will be sent
 username_to_message_in_case_of_errors: LiquidProgrammer
 
+# URL for server if self hosted
+server_url: https://geostackr.brutenis.net/plots/
+
 # Default values for all series if not supplied
 defaults:
     top_count: 20

@@ -4,7 +4,8 @@ import sys
 import re
 import time
 from numbers import Number
-from typing import Dict, List, Optional, Callable, Any, Tuple
+from pathlib import Path
+from typing import Dict, List, Optional, Callable, Any, Tuple, Union
 from datetime import datetime
 from functools import partial
 
@@ -12,9 +13,10 @@ import praw
 import yaml
 
 # Change these if you want to run it for a different series
-CONFIG = "config.yaml"
-SERIES = "series.yaml"
-FIG_PATH = "last_fig.png"
+PROJECT_PATH = Path(__file__).absolute().parent
+CONFIG = PROJECT_PATH / "config.yaml"
+SERIES = PROJECT_PATH / "series.yaml"
+FIG_PATH = PROJECT_PATH / "plots"
 SLEEP_INTERVAL_SECONDS = 300
 
 # Load config
@@ -71,10 +73,65 @@ except KeyError:
     IMGUR_API = None
 
 
+# noinspection PyPep8Naming
+class ScoreFunction:
+
+    def _set_score_functions(self) -> Dict[str, Callable]:
+        def maxX(n_outputs: int, input_scores: List[int]) -> List[int]:
+            return sorted(input_scores)[-n_outputs:]
+
+        def minX(n_outputs: int, input_scores: List[int]) -> List[int]:
+            return sorted(input_scores)[:n_outputs]
+
+        def padXwithX(n_outputs: int, pad_with: int, input_scores: List[int]) -> List[int]:
+            return [pad_with] * (n_outputs - len(input_scores)) + input_scores
+
+        def sum_(input_scores: List[int]) -> List[int]:
+            return [sum(input_scores)]
+
+        def average(input_scores: List[int]) -> List[int]:
+            return [sum(input_scores) // len(input_scores)]
+
+        def newestX(n_outputs: int, input_scores: List[int]) -> List[int]:
+            return input_scores[-n_outputs:]
+
+        def oldestX(n_outputs: int, input_scores: List[int]) -> List[int]:
+            return input_scores[:n_outputs]
+
+        functions: List[Callable] = [maxX, minX, padXwithX, sum_, average, newestX, oldestX]
+        self.score_functions = {func.__name__.replace("_", ""): func for func in functions}
+
+    def _set_regex_pattern(self):
+        function_names_as_regexes = [name.replace("X", r"(\d+)") for name in self.score_functions]
+        self.regex_pattern = re.compile(f"({'|'.join(function_names_as_regexes)})")
+
+    def __init__(self, score_function_str: str):
+        self._set_score_functions()
+        self._set_regex_pattern()
+        # "max4 -> sum" becomes [('max4', '4', '', '', '', '', ''), ('sum', '', '', '', '', '', '')]
+        parsed = re.findall(self.regex_pattern, score_function_str)
+        self.functions: List[Callable] = []
+        for function_name, *params in parsed:
+            function_name = re.sub(r"\d+", "X", function_name)
+            params = list(map(int, filter(lambda x: x != '', params)))
+            self.functions.append(partial(self.score_functions[function_name], *params))
+        self.functions.append(sum)
+
+    def __call__(self, scores: List[int]) -> int:
+        intermediate_scores: Union[List[int], int] = scores
+        for function in self.functions:
+            intermediate_scores = function(intermediate_scores)
+        return intermediate_scores
+
+
 class UserScores:
-    def __init__(self, author: str):
+    def __init__(self, author: str, score_function: ScoreFunction):
+        self.score_function = score_function
         self.scores: Dict[int, int] = {}
         self.author = author
+
+    def apply_score_function(self) -> int:
+        return self.score_function(list(self.scores.values()))
 
     def __getitem__(self, item: int) -> int:
         return self.scores.get(item, 0)
@@ -114,60 +171,6 @@ class UserScores:
     def y(self):
         """For using in pyplot"""
         return self._xy()["y"]
-
-
-# noinspection PyPep8Naming
-class ScoreFunction:
-
-    @staticmethod
-    def _get_score_functions() -> Dict[str, Callable]:
-        def maxX(n_outputs: int, input_scores: List[int]) -> List[int]:
-            return sorted(input_scores)[-n_outputs:]
-
-        def minX(n_outputs: int, input_scores: List[int]) -> List[int]:
-            return sorted(input_scores)[:n_outputs]
-
-        def padXwithX(n_outputs: int, pad_with: int, input_scores: List[int]) -> List[int]:
-            return [pad_with] * (n_outputs - len(input_scores)) + input_scores
-
-        def sum_(input_scores: List[int]) -> List[int]:
-            return [sum(input_scores)]
-
-        def average(input_scores: List[int]) -> List[int]:
-            return [sum(input_scores) // len(input_scores)]
-
-        def newestX(n_outputs: int, input_scores: List[int]) -> List[int]:
-            return input_scores[-n_outputs:]
-
-        def oldestX(n_outputs: int, input_scores: List[int]) -> List[int]:
-            return input_scores[:n_outputs]
-
-        functions: List[Callable] = [maxX, minX, padXwithX, sum_, average, newestX, oldestX]
-        return {func.__name__.replace("_", ""): func for func in functions}
-
-    @staticmethod
-    def _get_regex_pattern(score_functions: Dict[str, Callable]):
-        function_names_as_regexes = [name.replace("X", r"(\d+)") for name in score_functions]
-        return re.compile(f"({'|'.join(function_names_as_regexes)})")
-
-    score_functions: Dict[str, Callable] = _get_score_functions()
-    regex_pattern = _get_regex_pattern(score_functions)
-
-    def __init__(self, score_function_str: str):
-        # "max4 -> sum" becomes [('max4', '4', '', '', '', '', ''), ('sum', '', '', '', '', '', '')]
-        parsed = re.findall(ScoreFunction.regex_pattern, score_function_str)
-        self.functions: List[Callable] = []
-        for function_name, *params in parsed:
-            function_name = re.sub(r"\d+", "X", function_name)
-            params = map(int, filter(lambda x: x == '', params))
-            self.functions.append(partial(self.score_functions[function_name], *params))
-        self.functions.append(sum)
-
-    def __call__(self, user_scores: UserScores) -> int:
-        scores = user_scores.scores.values()
-        for function in self.functions:
-            scores = function(scores)
-        return scores
 
 
 def get_reddit_instance():
@@ -258,7 +261,7 @@ def get_top(scores_dict: Dict[str, UserScores]) -> List[Tuple[str, UserScores]]:
     """Returns a the scores dict as a sorted list of tuples"""
     score_list: List[Tuple[str, UserScores]] = list(scores_dict.items())
     # TODO: sort depending on config goal option
-    score_list.sort(key=lambda v: -v[1].sum())
+    score_list.sort(key=lambda v: -v[1].apply_score_function())
     return score_list
 
 
@@ -267,16 +270,16 @@ def add_ordinal_suffix(i: int) -> str:
 
 
 def get_formatted_table(top):
-    table = "| # | Username | Times Played | Average | **Sum** |\n"
+    table = "| # | Username | Times Played | Average | **Score** |\n"
     table += "|:-|:-|-:|-:|-:|\n"
     previous_score_and_index = (None, None)
     for index, (user, scores) in enumerate(top, 1):
         # Remember score and index if multiple people have the same score, so that each of
         # them have the same position
-        if previous_score_and_index[0] != scores.sum():
-            previous_score_and_index = (scores.sum(), index)
+        if previous_score_and_index[0] != scores.apply_score_function():
+            previous_score_and_index = (scores.apply_score_function(), index)
         index_fmt = add_ordinal_suffix(previous_score_and_index[1])
-        table += f"| {index_fmt} | /u/{user} | {scores.len()} | {scores.avg()} | {scores.sum()} |\n"
+        table += f"| {index_fmt} | /u/{user} | {scores.len()} | {scores.avg()} | {scores.apply_score_function()} |\n"
     return table
 
 
@@ -307,19 +310,20 @@ def get_formatted_csv(top, series_config):
     text = f"{indent}Username, Times Played, Average, Sum\n"
     for index, (user, scores) in enumerate(top, 1):
         if user not in series_config["ignore_in_sheets_standings"]:
-            text += f"{indent}{user}, {scores.len()}, {scores.avg()}, {scores.sum()}\n"
+            text += f"{indent}{user}, {scores.len()}, {scores.avg()}, {scores.apply_score_function()}\n"
     return text
 
 
 def merge_scores(scores_dict, submission, series_index: int, series_config):
     sub_scores = get_score_list(submission, series_config)
+    score_function = ScoreFunction(series_config["series_score_function"])
     for user, score in sub_scores.items():
         if user not in scores_dict:
-            scores_dict[user] = UserScores(user)
+            scores_dict[user] = UserScores(user, score_function)
         scores_dict.get(user).add(series_index, score)
 
 
-def save_line_plot(scores_list: List[Tuple[str, UserScores]], series_index: int) -> str:
+def save_line_plot(scores_list: List[Tuple[str, UserScores]], series_index: int, submission_id: str) -> str:
     from matplotlib import pyplot as plt
     from labellines import labelLines
 
@@ -339,7 +343,7 @@ def save_line_plot(scores_list: List[Tuple[str, UserScores]], series_index: int)
         plt.text(
             scores.x()[-1] + x_offset,
             scores.y()[-1],
-            scores.sum(),
+            scores.apply_score_function(),
             color=prev_line[0].get_color(),
             verticalalignment="center",
         )
@@ -353,12 +357,14 @@ def save_line_plot(scores_list: List[Tuple[str, UserScores]], series_index: int)
         labelLines(filter_lines_below_2x_values, zorder=2.5)
     except:
         pass
-    plt.savefig(FIG_PATH, dpi=300)
+    submission_dir = FIG_PATH / submission_id
+    submission_dir.mkdir(exist_ok=True, parents=True)
+    plt.savefig(submission_dir / "line_plot.png", dpi=300)
     plt.close()
     return title
 
 
-def save_bar_plot(scores_list: List[Tuple[str, UserScores]], series_index: int) -> str:
+def save_bar_plot(scores_list: List[Tuple[str, UserScores]], series_index: int, submission_id: str) -> str:
     from matplotlib import pyplot as plt
 
     scores_list = list(reversed(scores_list[: DEFAULTS["top_count"]]))
@@ -376,7 +382,9 @@ def save_bar_plot(scores_list: List[Tuple[str, UserScores]], series_index: int) 
         bars.append(plt.bar(range(len(bar_scores)), bar_scores, bottom=prev, width=0.65))
         prev = [a + b for a, b in zip(prev, bar_scores)]
     plt.legend((b[0] for b in reversed(bars)), (f"Round #{r}" for r in range(len(bars), 0, -1)), loc="upper left")
-    plt.savefig(FIG_PATH, dpi=300)
+    submission_dir = FIG_PATH / submission_id
+    submission_dir.mkdir(exist_ok=True, parents=True)
+    plt.savefig(submission_dir / "bar_plot.png", dpi=300)
     plt.close()
     return title
 
@@ -407,15 +415,15 @@ def if_graph_needs_update(body: str, top: List[Tuple[str, UserScores]]) -> bool:
     """Returns True if at least a single score needs an update"""
     pattern = re.compile(r"\d+ \|$", re.MULTILINE)
     matches = re.findall(pattern, body)[: DEFAULTS["top_count"]]
-    return any([s[1].sum() != int(c.replace("|", "")) for s, c in zip(top, matches)])
+    return any([s[1].apply_score_function() != int(c.replace("|", "")) for s, c in zip(top, matches)])
 
 
-def save_plots_and_get_urls(top_list: List[Tuple[str, UserScores]], series_index) -> List[str]:
+def save_plots_and_get_urls(top_list: List[Tuple[str, UserScores]], series_index, submission_id) -> List[str]:
     """Goes over every plot function, creates the url and uploads it to imgur"""
     formatted_urls: List[str] = []
     if IMGUR_API:
         for plot_function in [save_line_plot, save_bar_plot]:
-            formatted_urls.append(f"[{plot_function(top_list, series_index)}]({upload_to_imgur()})")
+            formatted_urls.append(f"[{plot_function(top_list, series_index, submission_id)}]({upload_to_imgur()})")
     return formatted_urls
 
 
@@ -488,7 +496,7 @@ def check_submissions_for_series(series_config):
 
         # Check if should post
         if scores_dict:
-            # top: List[Tuple[str, UserScores]] = get_top(scores_dict)
+            top: List[Tuple[str, UserScores]] = get_top(scores_dict)
             filtered_top: List[Tuple[str, UserScores]] = [
                                                              t for t in top if
                                                              t[0] not in series_config["ignore_in_reddit_standings"]
@@ -501,7 +509,7 @@ def check_submissions_for_series(series_config):
                 csv = get_formatted_csv(top, series_config)
                 print(csv)
                 subject = f'Statistics for "{submission.title}"'
-                urls = save_plots_and_get_urls(filtered_top, series_index)
+                urls = save_plots_and_get_urls(filtered_top, series_index, submission.id)
                 body = get_formatted_body(filtered_top, urls=urls, prev_post=prev_post, next_post=next_post)
                 print(body)
                 if not DEBUG_MODE:
@@ -513,7 +521,7 @@ def check_submissions_for_series(series_config):
                 print("\n\n\n=== EDITING COMMENT ===")
                 if if_graph_needs_update(comment.body, filtered_top):
                     print("=== Updating graph ===")
-                    urls = save_plots_and_get_urls(filtered_top, series_index)
+                    urls = save_plots_and_get_urls(filtered_top, series_index, submission.id)
                 else:
                     urls = re.findall(r"\[.*]\(https://i\.imgur\.com/.*\.png\)", comment.body)
                 body = get_formatted_body(filtered_top, urls=urls, prev_post=prev_post, next_post=next_post)
@@ -527,7 +535,7 @@ def handle_each_series():
     validate_existing_series()
 
     # Check for new series to be tracked
-    check_for_new_series()
+    # check_for_new_series()
 
     # Iterate through all tracked challenges to see if there are any updates
     for series_config in SERIES_CONFIGS:
