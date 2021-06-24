@@ -520,7 +520,7 @@ def handle_each_series():
     validate_existing_series()
 
     # Check for new series to be tracked
-    # check_for_new_series()
+    check_for_new_series()
 
     # Iterate through all tracked challenges to see if there are any updates
     for series_config in SERIES_CONFIGS:
