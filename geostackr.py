@@ -68,7 +68,6 @@ def validate_existing_series():
 
 # noinspection PyPep8Naming
 class ScoreFunction:
-
     def _set_score_functions(self) -> Dict[str, Callable]:
         def maxX(n_outputs: int, input_scores: List[int]) -> List[int]:
             return sorted(input_scores)[-n_outputs:]
@@ -106,7 +105,7 @@ class ScoreFunction:
         self.functions: List[Callable] = []
         for function_name, *params in parsed:
             function_name = re.sub(r"\d+", "X", function_name)
-            params = list(map(int, filter(lambda x: x != '', params)))
+            params = list(map(int, filter(lambda x: x != "", params)))
             self.functions.append(partial(self.score_functions[function_name], *params))
         self.functions.append(sum)
 
@@ -322,7 +321,9 @@ def get_plot_path(name: str, submission_id: str) -> Path:
     return submission_dir / f"{name}.png"
 
 
-def save_line_plot(scores_list: List[Tuple[str, UserScores]], series_index: int, submission_id: str) -> Tuple[str, Path]:
+def save_line_plot(
+    scores_list: List[Tuple[str, UserScores]], series_index: int, submission_id: str
+) -> Tuple[str, Path]:
     from matplotlib import pyplot as plt
     from labellines import labelLines
 
@@ -487,9 +488,8 @@ def check_submissions_for_series(series_config):
         if scores_dict:
             top: List[Tuple[str, UserScores]] = get_top(scores_dict)
             filtered_top: List[Tuple[str, UserScores]] = [
-                                                             t for t in top if
-                                                             t[0] not in series_config["ignore_in_reddit_standings"]
-                                                         ][: DEFAULTS["top_count"]]
+                t for t in top if t[0] not in series_config["ignore_in_reddit_standings"]
+            ][: DEFAULTS["top_count"]]
             comment = get_already_posted_comment(submission)
 
             urls = save_plots_and_get_urls(filtered_top, series_index, submission.id)
@@ -516,11 +516,9 @@ def check_submissions_for_series(series_config):
 
 
 def handle_each_series():
-    # Validate existing series
-    validate_existing_series()
-
     # Check for new series to be tracked
-    check_for_new_series()
+    if not DEBUG_MODE:
+        check_for_new_series()
 
     # Iterate through all tracked challenges to see if there are any updates
     for series_config in SERIES_CONFIGS:
@@ -539,8 +537,12 @@ def message_author_about_error(exception):
     get_reddit_instance().redditor(user).message(subject, body)
 
 
-if __name__ == "__main__":
+def main():
     sleep_modifier = 1
+
+    # Validate existing series
+    validate_existing_series()
+
     if DEBUG_MODE:
         print("Script running in DEBUG_MODE. No changes to reddit will be commited.")
         handle_each_series()
@@ -561,3 +563,7 @@ if __name__ == "__main__":
             print(sleep_message)
             print("=" * len(sleep_message))
             time.sleep(SLEEP_INTERVAL_SECONDS * sleep_modifier)
+
+
+if __name__ == "__main__":
+    main()
