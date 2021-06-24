@@ -55,6 +55,8 @@ def validate_existing_series():
     for current_series_config in SERIES_CONFIGS:
         if "regex" not in current_series_config:
             current_series_config["regex"] = DEFAULTS["regex"]
+        if "series_score_function" not in current_series_config:
+            current_series_config["series_score_function"] = ""
         for key in ["ignore", "ignore_in_reddit_standings", "ignore_in_sheets_standings"]:
             if key not in current_series_config:
                 current_series_config[key] = set()
