@@ -14,29 +14,29 @@ import yaml
 
 # Change these if you want to run it for a different series
 PROJECT_PATH = Path(__file__).absolute().parent
-CONFIG = PROJECT_PATH / "config.yaml"
-SERIES = PROJECT_PATH / "series.yaml"
+CONFIG_PATH = PROJECT_PATH / "config.yaml"
+SERIES_PATH = PROJECT_PATH / "series.yaml"
 FIG_PATH = PROJECT_PATH / "plots"
 SLEEP_INTERVAL_SECONDS = 300
 
 # Load config
 try:
-    config = yaml.load(open(CONFIG), Loader=yaml.FullLoader)
+    config = yaml.load(open(CONFIG_PATH), Loader=yaml.FullLoader)
 except IOError:
-    print(f"Could not load {CONFIG}. Make sure to rename it from {CONFIG}.example to {CONFIG}!")
+    print(f"Could not load {CONFIG_PATH}. Make sure to rename it from {CONFIG_PATH}.example to {CONFIG_PATH}!")
     sys.exit(1)
 
 # Load series
 try:
-    series = yaml.load(open(SERIES), Loader=yaml.FullLoader)
+    series = yaml.load(open(SERIES_PATH), Loader=yaml.FullLoader)
 except IOError:
-    print(f"Could not load {SERIES}. Make sure to rename it from {SERIES}.example to {SERIES}!")
+    print(f"Could not load {SERIES_PATH}. Make sure to rename it from {SERIES_PATH}.example to {SERIES_PATH}!")
     sys.exit(1)
 
 # Check if all keys required to be in config are there
 for required_in_config in ["defaults", "reddit_api", "debug", "subreddit"]:
     if required_in_config not in config:
-        print(f"'{required_in_config}' not defined in {CONFIG}")
+        print(f"'{required_in_config}' not defined in {CONFIG_PATH}")
         sys.exit(1)
 
 # In debug mode nothing committing will be done (i.e. no posts on reddit). Only prints to stdout
@@ -64,13 +64,6 @@ def validate_existing_series():
         keyvals = ", ".join([f"{k}='{v}'" for k, v in current_series_config.items()])
         print(f"series_config={{{keyvals}}}")
     print()
-
-
-try:
-    IMGUR_API = config["imgur_api"]
-except KeyError:
-    print(f"imgur_api not defined in {CONFIG}, won't post graphs!")
-    IMGUR_API = None
 
 
 # noinspection PyPep8Naming
@@ -180,7 +173,7 @@ def get_reddit_instance():
         client_secret=REDDIT_API["client_secret"],
         username=REDDIT_API["username"],
         password=REDDIT_API["password"],
-        user_agent="linux:geostackr:0.1 (by /u/LiquidProgrammer)",
+        user_agent="linux:geostackr:0.2 (by /u/LiquidProgrammer)",
     )
 
 
@@ -323,13 +316,19 @@ def merge_scores(scores_dict, submission, series_index: int, series_config):
         scores_dict.get(user).add(series_index, score)
 
 
-def save_line_plot(scores_list: List[Tuple[str, UserScores]], series_index: int, submission_id: str) -> str:
+def get_plot_path(name: str, submission_id: str) -> Path:
+    submission_dir = FIG_PATH / submission_id
+    submission_dir.mkdir(exist_ok=True, parents=True)
+    return submission_dir / f"{name}.png"
+
+
+def save_line_plot(scores_list: List[Tuple[str, UserScores]], series_index: int, submission_id: str) -> Tuple[str, Path]:
     from matplotlib import pyplot as plt
     from labellines import labelLines
 
     # Doesn't make much sense to plot anything if there is only 1 post
     if series_index <= 2:
-        return ""
+        return "", Path()
     title = f"Score History for Current Top {DEFAULTS['top_plot_count']} Participants"
     plt.rcParams.update({"font.size": 6})
     plt.title(title)
@@ -359,12 +358,13 @@ def save_line_plot(scores_list: List[Tuple[str, UserScores]], series_index: int,
         pass
     submission_dir = FIG_PATH / submission_id
     submission_dir.mkdir(exist_ok=True, parents=True)
-    plt.savefig(submission_dir / "line_plot.png", dpi=300)
+    plot_path = get_plot_path("line_plot", submission_id)
+    plt.savefig(plot_path, dpi=300)
     plt.close()
-    return title
+    return title, plot_path
 
 
-def save_bar_plot(scores_list: List[Tuple[str, UserScores]], series_index: int, submission_id: str) -> str:
+def save_bar_plot(scores_list: List[Tuple[str, UserScores]], series_index: int, submission_id: str) -> Tuple[str, Path]:
     from matplotlib import pyplot as plt
 
     scores_list = list(reversed(scores_list[: DEFAULTS["top_count"]]))
@@ -382,23 +382,10 @@ def save_bar_plot(scores_list: List[Tuple[str, UserScores]], series_index: int, 
         bars.append(plt.bar(range(len(bar_scores)), bar_scores, bottom=prev, width=0.65))
         prev = [a + b for a, b in zip(prev, bar_scores)]
     plt.legend((b[0] for b in reversed(bars)), (f"Round #{r}" for r in range(len(bars), 0, -1)), loc="upper left")
-    submission_dir = FIG_PATH / submission_id
-    submission_dir.mkdir(exist_ok=True, parents=True)
-    plt.savefig(submission_dir / "bar_plot.png", dpi=300)
+    plot_path = get_plot_path("bar_plot", submission_id)
+    plt.savefig(plot_path, dpi=300)
     plt.close()
-    return title
-
-
-def upload_to_imgur() -> str:
-    """Uploads the locally saved figure to imgur"""
-    if DEBUG_MODE:
-        return ""
-    from imgurpython import ImgurClient
-
-    client = ImgurClient(IMGUR_API["client_id"], IMGUR_API["client_secret"])
-    url = client.upload_from_path(FIG_PATH)["link"]
-    print(f"Uploaded image to {url}")
-    return url
+    return title, plot_path
 
 
 def format_title(title: str):
@@ -419,11 +406,13 @@ def if_graph_needs_update(body: str, top: List[Tuple[str, UserScores]]) -> bool:
 
 
 def save_plots_and_get_urls(top_list: List[Tuple[str, UserScores]], series_index, submission_id) -> List[str]:
-    """Goes over every plot function, creates the url and uploads it to imgur"""
+    """Goes over every plot function, saves the url"""
     formatted_urls: List[str] = []
-    if IMGUR_API:
-        for plot_function in [save_line_plot, save_bar_plot]:
-            formatted_urls.append(f"[{plot_function(top_list, series_index, submission_id)}]({upload_to_imgur()})")
+    for plot_function in [save_line_plot, save_bar_plot]:
+        title, plot_path = plot_function(top_list, series_index, submission_id)
+        if title != "":
+            plot_url = config["server_url"] + str(plot_path.relative_to(PROJECT_PATH))
+            formatted_urls.append(f"[{title}]({plot_url})")
     return formatted_urls
 
 
@@ -503,13 +492,14 @@ def check_submissions_for_series(series_config):
                                                          ][: DEFAULTS["top_count"]]
             comment = get_already_posted_comment(submission)
 
+            urls = save_plots_and_get_urls(filtered_top, series_index, submission.id)
+
             # Post new if not already there
             if comment is None:
                 print("\n\n\n=== POSTING NEW COMMENT ===")
                 csv = get_formatted_csv(top, series_config)
                 print(csv)
                 subject = f'Statistics for "{submission.title}"'
-                urls = save_plots_and_get_urls(filtered_top, series_index, submission.id)
                 body = get_formatted_body(filtered_top, urls=urls, prev_post=prev_post, next_post=next_post)
                 print(body)
                 if not DEBUG_MODE:
@@ -519,11 +509,6 @@ def check_submissions_for_series(series_config):
             # If comment exists then edit it instead
             else:
                 print("\n\n\n=== EDITING COMMENT ===")
-                if if_graph_needs_update(comment.body, filtered_top):
-                    print("=== Updating graph ===")
-                    urls = save_plots_and_get_urls(filtered_top, series_index, submission.id)
-                else:
-                    urls = re.findall(r"\[.*]\(https://i\.imgur\.com/.*\.png\)", comment.body)
                 body = get_formatted_body(filtered_top, urls=urls, prev_post=prev_post, next_post=next_post)
                 print(body)
                 if not DEBUG_MODE:

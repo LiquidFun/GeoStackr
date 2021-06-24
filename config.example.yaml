@@ -16,12 +16,6 @@ subreddit:
     ### name: geochallenges
     name: $subreddit_to_monitor
 
-### Used to post pretty graphs for the history of the series
-### Can be left out, then no graphs will be posted. Uncomment if needed.
-# imgur_api:
-#     client_id: $your_imgur_api_client_id
-#     client_secret: $your_imgur_api_client_secret
-
 # User which will receive messages when there are errors
 # if left out then no message will be sent
 username_to_message_in_case_of_errors: LiquidProgrammer
