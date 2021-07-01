@@ -488,10 +488,10 @@ def reply_to_tracking_comment(comment):
 
 
 def if_reset_series_scores(submissions: List[praw.reddit.Submission], current_index: int, series_config: Dict):
-    if current_index == 0:
+    if not (0 <= current_index - 2 and current_index - 1 < len(submissions)):
         return False
-    prev_post_date = datetime.fromtimestamp(submissions[current_index - 1].created_utc)
-    curr_post_date = datetime.fromtimestamp(submissions[current_index].created_utc)
+    prev_post_date = datetime.fromtimestamp(submissions[current_index - 2].created_utc)
+    curr_post_date = datetime.fromtimestamp(submissions[current_index - 1].created_utc)
     reset_when = series_config.get("reset_every", "").lower()
     for interval, function in [
         ("day", lambda date: date.day),
