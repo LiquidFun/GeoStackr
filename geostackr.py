@@ -74,7 +74,7 @@ def validate_existing_series():
 
 # noinspection PyPep8Naming
 class ScoreFunction:
-    def _set_score_functions(self) -> Dict[str, Callable]:
+    def _set_score_functions(self):
         def maxX(n_outputs: int, input_scores: List[int]) -> List[int]:
             return sorted(input_scores)[-n_outputs:]
 
@@ -344,7 +344,7 @@ def save_line_plot(
     from labellines import labelLines
 
     # Doesn't make much sense to plot anything if there is only 1 post
-    if series_index <= 2:
+    if len(scores_list) <= 1:
         return "", Path()
     title = f"Score History for Current Top {DEFAULTS['top_plot_count']} Participants"
     plt.rcParams.update({"font.size": 6})
@@ -538,6 +538,7 @@ def check_submissions_for_series(series_config):
             comment = get_already_posted_comment(submission)
 
             urls = save_plots_and_get_urls(filtered_top, series_index, submission.id)
+            body = get_formatted_body(filtered_top, urls=urls, prev_post=prev_post, next_post=next_post)
 
             # Post new if not already there
             if comment is None:
@@ -545,7 +546,6 @@ def check_submissions_for_series(series_config):
                 csv = get_formatted_csv(top, series_config)
                 print(csv)
                 subject = f'Statistics for "{submission.title}"'
-                body = get_formatted_body(filtered_top, urls=urls, prev_post=prev_post, next_post=next_post)
                 print(body)
                 if not DEBUG_MODE:
                     redditor.message(subject, csv)
@@ -554,7 +554,6 @@ def check_submissions_for_series(series_config):
             # If comment exists then edit it instead
             else:
                 print("\n\n\n=== EDITING COMMENT ===")
-                body = get_formatted_body(filtered_top, urls=urls, prev_post=prev_post, next_post=next_post)
                 print(body)
                 if not DEBUG_MODE:
                     comment.edit(body)
