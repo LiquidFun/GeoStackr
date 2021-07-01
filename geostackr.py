@@ -493,11 +493,12 @@ def if_reset_series_scores(submissions: List[praw.reddit.Submission], current_in
     prev_post_date = datetime.fromtimestamp(submissions[current_index - 2].created_utc)
     curr_post_date = datetime.fromtimestamp(submissions[current_index - 1].created_utc)
     reset_when = series_config.get("reset_every", "").lower()
-    for interval, function in [
-        ("day", lambda date: date.day),
-        ("week", lambda date: date.isocalendar()[1]),
-        ("month", lambda date: date.month),
-    ]:
+    for interval, function in {
+        "day": lambda date: (date.year, date.month, date.day),
+        "week": lambda date: (date.year, date.isocalendar().week),
+        "month": lambda date: (date.year, date.month),
+        "year": lambda date: date.year,
+    }.items():
         if interval in reset_when and function(prev_post_date) != function(curr_post_date):
             return True
     return False
