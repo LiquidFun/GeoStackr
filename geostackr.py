@@ -57,7 +57,11 @@ def validate_existing_series():
             current_series_config["regex"] = DEFAULTS["regex"]
         if "series_score_function" not in current_series_config:
             current_series_config["series_score_function"] = ""
-        for key in ["ignore", "ignore_in_reddit_standings", "ignore_in_sheets_standings"]:
+        for key in [
+            "ignore",
+            "ignore_in_reddit_standings",
+            "ignore_in_sheets_standings",
+        ]:
             if key not in current_series_config:
                 current_series_config[key] = set()
             else:
@@ -92,7 +96,15 @@ class ScoreFunction:
         def oldestX(n_outputs: int, input_scores: List[int]) -> List[int]:
             return input_scores[:n_outputs]
 
-        functions: List[Callable] = [maxX, minX, padXwithX, sum_, average, newestX, oldestX]
+        functions: List[Callable] = [
+            maxX,
+            minX,
+            padXwithX,
+            sum_,
+            average,
+            newestX,
+            oldestX,
+        ]
         self.score_functions = {func.__name__.replace("_", ""): func for func in functions}
 
     def _set_regex_pattern(self):
@@ -169,13 +181,15 @@ class UserScores:
 
 def get_reddit_instance():
     # Get an authenticated reddit instance from praw by using the config
-    return praw.Reddit(
+    reddit = praw.Reddit(
         client_id=REDDIT_API["client_id"],
         client_secret=REDDIT_API["client_secret"],
         username=REDDIT_API["username"],
         password=REDDIT_API["password"],
         user_agent="linux:geostackr:0.2 (by /u/LiquidProgrammer)",
     )
+    reddit.validate_on_submit = True
+    return reddit
 
 
 def get_bot_username() -> str:
@@ -377,14 +391,23 @@ def save_bar_plot(scores_list: List[Tuple[str, UserScores]], series_index: int, 
     plt.gcf().subplots_adjust(bottom=0.25)
     plt.ylabel("Stacked scores")
     plt.xlabel("Username")
-    plt.xticks(list(range(len(scores_list))), [label for label, _ in scores_list], rotation=45, ha="right")
+    plt.xticks(
+        list(range(len(scores_list))),
+        [label for label, _ in scores_list],
+        rotation=45,
+        ha="right",
+    )
     prev = [0] * len(scores_list)
     bars = []
     for i in range(1, series_index + 1):
         bar_scores = [user_scores[i] for _, user_scores in scores_list]
         bars.append(plt.bar(range(len(bar_scores)), bar_scores, bottom=prev, width=0.65))
         prev = [a + b for a, b in zip(prev, bar_scores)]
-    plt.legend((b[0] for b in reversed(bars)), (f"Round #{r}" for r in range(len(bars), 0, -1)), loc="upper left")
+    plt.legend(
+        (b[0] for b in reversed(bars)),
+        (f"Round #{r}" for r in range(len(bars), 0, -1)),
+        loc="upper left",
+    )
     plot_path = get_plot_path("bar_plot", submission_id)
     plt.savefig(plot_path, dpi=300)
     plt.close()
@@ -464,6 +487,22 @@ def reply_to_tracking_comment(comment):
     comment.reply("""I will be tracking this series from now on """ + get_info_line())
 
 
+def if_reset_series_scores(submissions: List[praw.reddit.Submission], current_index: int, series_config: Dict):
+    if current_index == 0:
+        return False
+    prev_post_date = datetime.fromtimestamp(submissions[current_index - 1].created_utc)
+    curr_post_date = datetime.fromtimestamp(submissions[current_index].created_utc)
+    reset_when = series_config.get("reset_every", "").lower()
+    for interval, function in [
+        ("day", lambda date: date.day),
+        ("week", lambda date: date.isocalendar()[1]),
+        ("month", lambda date: date.month),
+    ]:
+        if interval in reset_when and function(prev_post_date) != function(curr_post_date):
+            return True
+    return False
+
+
 def check_submissions_for_series(series_config):
     print(str(datetime.now()) + ": Running GeoStackr.")
 
@@ -482,6 +521,9 @@ def check_submissions_for_series(series_config):
             relevant_submissions[series_index - 2] if 0 <= series_index - 2 < len(relevant_submissions) else None
         )
         next_post = relevant_submissions[series_index] if 0 <= series_index < len(relevant_submissions) else None
+
+        if if_reset_series_scores(relevant_submissions, series_index, series_config):
+            scores_dict.clear()
 
         # Get scores
         merge_scores(scores_dict, submission, series_index, series_config)
