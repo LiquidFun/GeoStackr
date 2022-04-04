@@ -548,7 +548,8 @@ def check_submissions_for_series(series_config):
                 subject = f'Statistics for "{submission.title}"'
                 print(body)
                 if not DEBUG_MODE:
-                    redditor.message(subject, csv)
+                    if series_config.get("message_with_spreadsheet", False):
+                        redditor.message(subject, csv)
                     submission.reply(body)
 
             # If comment exists then edit it instead

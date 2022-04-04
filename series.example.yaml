@@ -16,6 +16,8 @@
 ###            scoreboard
 ###     ignore_in_sheets_standings (optional):
 ###            usernames of users who will not be posted to google sheets
+###     message_with_spreadsheet (optional):
+###            true/false whether owner should be messaged with a spreadsheet
 ###
 ###
 ### Example:
